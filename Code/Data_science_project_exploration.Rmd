@@ -1,0 +1,280 @@
+---
+title: "Data_exploration"
+output: html_document
+date: "2023-09-09"
+---
+Read data files, including:
+- Total demand
+- Temperature
+- Demand forecast
+```{r library setup}
+##read files
+temperature_nsw <- read.csv("C:/Users/howar/OneDrive/Documents/Data Science Project/temperature_nsw.csv", header=T)
+totaldemand_nsw <- read.csv("C:/Users/howar/OneDrive/Documents/Data Science Project/totaldemand_nsw.csv", header=T)
+forecastdemand_nsw <- read.csv("C:/Users/howar/OneDrive/Documents/Data Science Project/forecastdemand_nsw.csv", header=T)
+```
+
+Read required R libraries.
+```{r library}
+##load relevant libraries
+library(lubridate)
+library(dplyr)
+library(crayon)
+library(tidyr)
+library(ggplot2)
+```
+
+## R Markdown
+
+join via initial and final estimate to forecast demand
+
+create boxplot by year/month/day for total demand
+
+Get max/min timegap between each measure for all 3 datasets <- data integrity check.
+
+Check for seasonality trend for total demand, temperature
+
+create line chart to display actual - final to confirm model accuracy of aemo
+
+```{r data import and clean}
+##need to change to full outer join
+data <- totaldemand_nsw %>% full_join(temperature_nsw,by=c('DATETIME')) %>% select(-LOCATION,-REGIONID);
+
+##filter rows that do not have actual demand
+data <- data %>% filter(!is.na(TOTALDEMAND))
+
+##arrange by date in ascending
+data <- data %>% arrange(DATETIME);
+
+##fill in missing temperature (down fill)
+data <- data %>% fill(TEMPERATURE)
+
+##create table with period of initial forecast
+initial_forecast <- forecastdemand_nsw %>% 
+  filter(PERIODID==1) %>% 
+  select(DATETIME,
+         FORECASTDEMAND)%>%
+  rename('INITIAL_FORECAST'='FORECASTDEMAND')
+
+##create table with period of final forecast
+final_forecast_period <- forecastdemand_nsw %>% 
+  group_by(DATETIME) %>% 
+  summarise_at(vars(PERIODID),
+               list(PERIODID = max))
+final_forecast <- forecastdemand_nsw %>%
+  inner_join(final_forecast_period,by=c('DATETIME','PERIODID')) %>%
+  select(DATETIME,
+         FORECASTDEMAND) %>%
+  rename('FINAL_FORECAST'='FORECASTDEMAND')
+
+##join initial and final forecast to table data
+data <- data %>% 
+  left_join(initial_forecast,by=c('DATETIME')) %>%
+  left_join(final_forecast,by=c('DATETIME'))
+
+##fill in missing initial/final forecast demand (down fill)
+data <- data %>% 
+  fill(INITIAL_FORECAST) %>%
+  fill(FINAL_FORECAST)
+
+##Create DATE and MONTHDATE field for plotting
+data$DATE <- as.Date(substr(data$DATETIME,1,10))
+data$YEARMONTH<- as.Date(paste(substr(data$DATE,1,7), "-01", sep=""))
+  
+##convert DATETIME to date
+data$DATETIME <- ymd_hms(data$DATETIME)
+
+##remove unneeded table
+rm('final_forecast_period')
+
+```
+
+Generate relevant date time derivations.
+
+```{r create date fields}
+##create year/month/day/hour/minute fields
+data <- data %>% mutate(YEAR=year(DATETIME), 
+                        MONTH=month(DATETIME),
+                        DAY=day(DATETIME),
+                        HOUR=hour(DATETIME), 
+                        MINUTE=minute(DATETIME))
+
+##season
+data <- data %>%mutate(SEASON = case_when(
+  MONTH %in%  9:11 ~ "SPRING",
+  MONTH %in%  c(12, 1, 2)  ~ "SUMMER",
+  MONTH %in%  3:5  ~ "AUTUMN",
+  TRUE ~ "WINTER"))
+##create boolean for 8am~8pm timeslot
+data <- data %>%mutate(timeframe_8amto8pm = case_when(
+  HOUR %in%  8:20 ~ TRUE,
+  TRUE ~ FALSE))
+##Get days of week, monday = 1,...,sunday=7
+data<- data%>%mutate(DaysOfWeek=wday(DATETIME,
+                                     week_start = getOption("lubridate.week.start", 1)))
+##get weekday&weekend
+data <- data %>%mutate(WEEKDAYWEEKEND = case_when(
+  DaysOfWeek %in%  1:5 ~ "WEEKDAY",
+  DaysOfWeek %in%  6:7  ~ "WEEKEND",
+))
+
+##Deduplicate
+data <- data %>% distinct()
+
+```
+
+Calculate rolling datetime difference to get gaps, and summarise
+```{r Get rolling time difference}
+data <- data %>%  mutate(DATETIME_DIFF = DATETIME - lag(DATETIME))
+table(data$DATETIME_DIFF)
+
+```
+investigate the 0 min diff rows (resolved):
+```{r}
+##no more duplicates
+data %>% filter(DATETIME_DIFF==0)
+```
+
+Plot data for datetime against total demand:
+```{r plot }
+plot(data$TOTALDEMAND~data$DATETIME,type='l')
+
+```
+
+Due to the number of spikes, it is difficult to identify trends, attempting to plot by year-month, aggregating energy usage by averaging (since time interval is not consistent):
+```{r plot2}
+##drop incomplete period
+##Calculate grouped total demand and forecast
+data_YM_plot <- data %>% 
+  filter(YEARMONTH != as.Date('2022-08-01')) %>%
+  group_by(YEARMONTH) %>%
+  summarise(T_DEMAND=mean(TOTALDEMAND),
+            T_forecastfinal = mean(FINAL_FORECAST))
+
+##First row of March (Autumn)
+data_YM_plot <- data_YM_plot %>%
+  arrange(YEARMONTH) %>%
+  group_by(yr = year(YEARMONTH), mth = month(YEARMONTH)) %>%
+  # flag each first March row
+  mutate(first_Mar_row = mth ==3 & row_number()==1)
+
+##First row of June (Winter)
+data_YM_plot <- data_YM_plot %>%
+  # ensure it's sorted by date
+  arrange(YEARMONTH) %>%
+  # group by year and month
+  group_by(yr = year(YEARMONTH), mth = month(YEARMONTH)) %>%
+  # flag each first January row
+  mutate(first_Jun_row = mth ==6 & row_number()==1)
+
+##First row of September (Spring)
+data_YM_plot <- data_YM_plot %>%
+  arrange(YEARMONTH) %>%
+  group_by(yr = year(YEARMONTH), mth = month(YEARMONTH)) %>%
+  # flag each first September row
+  mutate(first_Sep_row = mth == 9 & row_number()==1)
+
+##First row of December (Summer)
+data_YM_plot <- data_YM_plot %>%
+  arrange(YEARMONTH) %>%
+  group_by(yr = year(YEARMONTH), mth = month(YEARMONTH)) %>%
+  # flag each first December row
+  mutate(first_Dec_row = mth ==12 & row_number()==1)
+
+plot(data_YM_plot$T_DEMAND~data_YM_plot$YEARMONTH,type='l')
+##Create vertical line for diff season
+##blue = winter
+##green = spring
+##yellow = summer
+##red = autumn
+points(data_YM_plot$T_forecastfinal~data_YM_plot$YEARMONTH,type='l',col='blue',lty=2)
+abline(v=data_YM_plot$YEARMONTH[data_YM_plot$first_Sep_row],col='green')
+abline(v=data_YM_plot$YEARMONTH[data_YM_plot$first_Dec_row],col='yellow')
+abline(v=data_YM_plot$YEARMONTH[data_YM_plot$first_Mar_row],col='red')
+abline(v=data_YM_plot$YEARMONTH[data_YM_plot$first_Jun_row],col='lightblue')
+legend(x = "top",
+       col = c("black","blue"), lty = 1, lwd = 1,
+       legend = c('Avg. Total Demand', 'Avg.Forecasted Demand'))
+```
+It can be seen that the estimate is not too far from actual.Winter months will always end up in positive spike.
+
+```{r calculate MSE and MAE}
+##Apply formula for error (x-x_bar)
+data <- data %>%
+  mutate(absoluteError = abs(FINAL_FORECAST - TOTALDEMAND),
+         SE = (FINAL_FORECAST - TOTALDEMAND)**2)
+##Output MAE and MSE
+MAE <- mean(data$absoluteError)
+MSE <- mean(data$SE)
+##Output as dataframe
+Error_measure <- c('MAE','MSE')
+Values <- c(MAE,MSE)
+MAE_MSE <- data.frame(Error_measure,Values)
+rm(MAE,MSE,Error_measure,Values)
+print(MAE_MSE)
+```
+
+Large difference between MAE and MSE indicating the forecasted demand is being penalized for large number of outliers.
+
+Plot the residuals. MAE is highest during Summer and Winter.
+```{r plot2}
+##drop incomplete month
+##Calculate MSE and SE
+data_YM_plot <- data %>% 
+  filter(YEARMONTH != as.Date('2022-08-01')) %>%
+  group_by(YEARMONTH) %>%
+  summarise(MAE = mean(absoluteError),
+            MSE = mean(SE))
+
+##First row of March (Autumn)
+data_YM_plot <- data_YM_plot %>%
+  arrange(YEARMONTH) %>%
+  group_by(yr = year(YEARMONTH), mth = month(YEARMONTH)) %>%
+  # flag each first March row
+  mutate(first_Mar_row = mth ==3 & row_number()==1)
+
+##First row of June (Winter)
+data_YM_plot <- data_YM_plot %>%
+  arrange(YEARMONTH) %>%
+  # group by year and month
+  group_by(yr = year(YEARMONTH), mth = month(YEARMONTH)) %>%
+  # flag each first June row
+  mutate(first_Jun_row = mth ==6 & row_number()==1)
+
+##First row of September (Spring)
+data_YM_plot <- data_YM_plot %>%
+  arrange(YEARMONTH) %>%
+  group_by(yr = year(YEARMONTH), mth = month(YEARMONTH)) %>%
+  # flag each first September row
+  mutate(first_Sep_row = mth == 9 & row_number()==1)
+
+##First row of December (Summer)
+data_YM_plot <- data_YM_plot %>%
+  arrange(YEARMONTH) %>%
+  group_by(yr = year(YEARMONTH), mth = month(YEARMONTH)) %>%
+  # flag each first December row
+  mutate(first_Dec_row = mth ==12 & row_number()==1)
+
+plot(data_YM_plot$MAE~data_YM_plot$YEARMONTH,type='l')
+points(data_YM_plot$MSE~data_YM_plot$YEARMONTH,type='l',col='blue',lty=2)
+abline(v=data_YM_plot$YEARMONTH[data_YM_plot$first_Sep_row],col='green')
+abline(v=data_YM_plot$YEARMONTH[data_YM_plot$first_Dec_row],col='yellow')
+abline(v=data_YM_plot$YEARMONTH[data_YM_plot$first_Mar_row],col='red')
+abline(v=data_YM_plot$YEARMONTH[data_YM_plot$first_Jun_row],col='lightblue')
+legend(x = "top",
+       col = c("black"), lty = 1, lwd = 1,
+       legend = c('MAE'))
+```
+Plot MSE (Similar as MAE):
+```{r plot MSE}
+plot(data_YM_plot$MSE~data_YM_plot$YEARMONTH,type='l')
+points(data_YM_plot$MSE~data_YM_plot$YEARMONTH,type='l',col='blue',lty=2)
+abline(v=data_YM_plot$YEARMONTH[data_YM_plot$first_Sep_row],col='green')
+abline(v=data_YM_plot$YEARMONTH[data_YM_plot$first_Dec_row],col='yellow')
+abline(v=data_YM_plot$YEARMONTH[data_YM_plot$first_Mar_row],col='red')
+abline(v=data_YM_plot$YEARMONTH[data_YM_plot$first_Jun_row],col='lightblue')
+legend(x = "top",
+       col = c("black"), lty = 1, lwd = 1,
+       legend = c('MSE'))
+
+```
