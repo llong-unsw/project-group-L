@@ -17,8 +17,7 @@ package_list <- c(
   , "lubridate"
   , "data.table"
   , "crayon"
-  ,"ggplot2"
-  ,"zoo"
+  , "zoo"
 )
 
 # list of packages not installed
@@ -139,8 +138,8 @@ table(initial_forecast_test$DATETIME_DIFF)
 ##create table with period of final forecast
 final_forecast_period <- forecastdemand_nsw %>% 
   group_by(DATETIME) %>% 
-  summarise_at(vars(PERIODID),
-               list(PERIODID = max))
+  summarise(PERIODID = max(PERIODID))
+
 final_forecast <- forecastdemand_nsw %>%
   inner_join(final_forecast_period,by=c('DATETIME','PERIODID')) %>%
   select(DATETIME,
@@ -202,9 +201,9 @@ data$WINTER <- if_else(data$SEASON == 'WINTER',1,0)
 
 ##create boolean for 8am~8pm timeslot
 data <- data %>%mutate(timeframe_8amto8pm = case_when(
-  HOUR %in%  8:20 ~ TRUE,
-  TRUE ~ FALSE))
-data$DuringDay <- if_else(data$timeframe_8amto8pm == TRUE,1,0)
+  HOUR %in%  8:20 ~ 1,
+  TRUE ~ 0))
+data$DuringDay <- if_else(data$timeframe_8amto8pm == 1,1,0)
 
 ##Get days of week, monday = 1,...,sunday=7
 data<- data%>%mutate(DaysOfWeek=lubridate::wday(DATETIME,week_start = getOption("lubridate.week.start", 1)));
@@ -229,8 +228,12 @@ data$EXTREME_COLD_DAY <- if_else(data$TEMPERATURE < 10 & data$DuringDay == 1, 1,
 data$EXTREME_COLD_NIGHT <- if_else(data$TEMPERATURE < 0 & data$DuringDay == 0, 1, 0)
 
 ##Create DATE and MONTHDATE field for joining/plotting
-data$DATE <- as.Date(substr(data$DATETIME,1,10))
-data$YEARMONTH<- as.Date(paste(substr(data$DATE,1,7), "-01", sep=""))
+data$DATE <- as.Date(paste(year(data$DATETIME), 
+                           month(data$DATETIME),
+                           day(data$DATETIME), sep = "-"))
+data$YEARMONTH<- as.Date(paste(year(data$DATETIME), 
+                               month(data$DATETIME),
+                               '01', sep = "-"))
 
 
 ###########################
