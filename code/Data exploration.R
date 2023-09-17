@@ -18,6 +18,8 @@ package_list <- c(
   , "data.table"
   , "crayon"
   , "zoo"
+  , "tsibble"
+  , "timeDate"
 )
 
 # list of packages not installed
@@ -59,6 +61,9 @@ totaldemand_nsw[duplicated(totaldemand_nsw)] #no more dupes
 ##TOTAL DEMAND##
 ################
 
+#apply summary- seems to be okay
+summary(totaldemand_nsw)
+
 #Sort by datetime in ascending
 totaldemand_nsw <- totaldemand_nsw %>% arrange(DATETIME)
 
@@ -90,6 +95,21 @@ data %>% filter(is.na(TOTALDEMAND)) #should return 0
 ##Temperature##
 ###############
 
+#Temperature has some questionable measures
+summary(temperature_nsw) #comes from base data
+
+#strange values start from -1643
+table(temperature_nsw %>% 
+        filter(TEMPERATURE <= 0) %>% 
+        select(TEMPERATURE) %>% 
+        arrange(TEMPERATURE))
+
+summary(temperature_nsw$TEMPERATURE)
+
+#Remove temperatures below -23 (doesn't make any sense for NSW otherwise)
+#Reference: http://www.bom.gov.au/climate/extreme/records.shtml
+
+temperature_nsw <- temperature_nsw %>% filter(TEMPERATURE >=-23)
 #Sort by datetime in ascending
 temperature_nsw <- temperature_nsw %>% arrange(DATETIME)
 
@@ -103,13 +123,14 @@ temperature_nsw_test$index <- 1:nrow(temperature_nsw_test)
 temperature_nsw_test %>% filter(DATETIME_DIFF == 5430)
 temperature_nsw_test %>% filter(index %in% 128365:128369)
 
-
-
 #Create date matrix with 1 min interval
 datematrix1m <- data.frame(DATETIME=seq(as.POSIXct(min(totaldemand_nsw$DATETIME)), 
                                         as.POSIXct(max(totaldemand_nsw$DATETIME)), 
                                         by="1 mins"))
+
+#Join date matrix (1 min interval) to temperature data
 temperature_nsw <- datematrix1m %>% left_join(temperature_nsw,by=c('DATETIME'))
+
 #fill in na's via interpolation
 #use this as reference: https://journals.ametsoc.org/view/journals/clim/26/19/jcli-d-12-00633.1.xml
 temperature_nsw$TEMPERATURE <- na.approx(temperature_nsw$TEMPERATURE)
@@ -120,6 +141,10 @@ data <- data %>% left_join(temperature_nsw,by=c('DATETIME')) %>% select(-LOCATIO
 ##############################
 ##INITIAL AND FINAL FORECAST##
 ##############################
+
+#summary for forecast demand table - seems to be fine
+summary(forecastdemand_nsw)
+
 #Sort by datetime in ascending
 forecastdemand_nsw <- forecastdemand_nsw %>% arrange(DATETIME,PERIODID)
 
@@ -175,16 +200,46 @@ data %>% filter(is.na(TEMPERATURE))
 data %>% filter(is.na(INITIAL_FORECAST))
 data %>% filter(is.na(FINAL_FORECAST))
 
-############################
-##DERIVE ADDITIONAL FIELDS##
-############################
+################################
+##Aggregate the data to hourly##
+################################
 
-##convert DATETIME to date -- no longer required, reading in as right field on auto
-##data$DATETIME = ymd_hms(data$DATETIME);
+#Since the forecast made by models will be hourly
 
 ##create year/month/day/hour/minute fields
-data <- data %>% mutate(YEAR=year(DATETIME), MONTH=month(DATETIME),DAY=day(DATETIME));
-data <- data %>% mutate(HOUR=hour(DATETIME), MINUTE=minute(DATETIME));
+data <- data %>% mutate(YEAR=year(DATETIME), 
+                        MONTH=month(DATETIME),
+                        DAY=day(DATETIME),
+                        HOUR=hour(DATETIME), 
+                        MINUTE=minute(DATETIME));
+
+##Create DATE and MONTHDATE field for joining/plotting
+data$DATE <- as.Date(paste(year(data$DATETIME), 
+                           month(data$DATETIME),
+                           day(data$DATETIME), sep = "-"))
+data$YEARMONTH<- as.Date(paste(year(data$DATETIME), 
+                               month(data$DATETIME),
+                               '01', sep = "-"))
+
+#Aggregate the fields
+#Agg total demand via sum
+#Agg initial/final forecast via sum
+#Agg temperature by mean (thought of using max/min, but took the unbiased approach)
+data <- data %>%
+  group_by(DATE,
+           YEARMONTH,
+           YEAR,
+           MONTH,
+           DAY,
+           HOUR) %>%
+  summarise(TOTALDEMAND=sum(TOTALDEMAND),
+            INITIALFORECAST=sum(INITIAL_FORECAST),
+            FINAL_FORECAST=sum(FINAL_FORECAST),
+            TEMPERATURE=mean(TEMPERATURE))
+
+###########################################
+##DERIVE ADDITIONAL FIELDS (Date related)##
+###########################################
 
 ##season
 data <- data %>%mutate(SEASON = case_when(
@@ -199,20 +254,22 @@ data$SUMMER <- if_else(data$SEASON == 'SUMMER',1,0)
 data$AUTUMN <- if_else(data$SEASON == 'AUTUMN',1,0)
 data$WINTER <- if_else(data$SEASON == 'WINTER',1,0)
 
-##create boolean for 8am~8pm timeslot
-data <- data %>%mutate(timeframe_8amto8pm = case_when(
+##create boolean for 8am~8pm timeslot, using it as cutoff for day/night
+data <- data %>%mutate(DuringDay = case_when(
   HOUR %in%  8:20 ~ 1,
   TRUE ~ 0))
-data$DuringDay <- if_else(data$timeframe_8amto8pm == 1,1,0)
 
 ##Get days of week, monday = 1,...,sunday=7
-data<- data%>%mutate(DaysOfWeek=lubridate::wday(DATETIME,week_start = getOption("lubridate.week.start", 1)));
+data<- data%>%mutate(DaysOfWeek=lubridate::wday(DATE,week_start = getOption("lubridate.week.start", 1)));
 ##get weekday&weekend
-data <- data %>%mutate(WEEKDAYWEEKEND = case_when(
-  DaysOfWeek %in%  1:5 ~ "WEEKDAY",
-  DaysOfWeek %in%  6:7  ~ "WEEKEND"
+data <- data %>%mutate(BUSINESS_DAY = case_when(
+  DaysOfWeek %in%  1:5 ~ 1,
+  DaysOfWeek %in%  6:7  ~ 0
 ))
-data$BUSINESS_DAY <- if_else(data$WEEKDAYWEEKEND == 'WEEKDAY',1,0)
+
+##################################################
+##DERIVE ADDITIONAL FIELDS (Temperature related)##
+##################################################
 
 ##hot/cold day/night
 #use as reference temp http://www.bom.gov.au/climate/change/about/extremes.shtml
@@ -227,18 +284,25 @@ data$EXTREME_HOT_NIGHT <- if_else(data$TEMPERATURE > 25 & data$DuringDay == 0, 1
 data$EXTREME_COLD_DAY <- if_else(data$TEMPERATURE < 10 & data$DuringDay == 1, 1, 0)
 data$EXTREME_COLD_NIGHT <- if_else(data$TEMPERATURE < 0 & data$DuringDay == 0, 1, 0)
 
-##Create DATE and MONTHDATE field for joining/plotting
-data$DATE <- as.Date(paste(year(data$DATETIME), 
-                           month(data$DATETIME),
-                           day(data$DATETIME), sep = "-"))
-data$YEARMONTH<- as.Date(paste(year(data$DATETIME), 
-                               month(data$DATETIME),
-                               '01', sep = "-"))
-
+#Create aggregated field for plotting
+data <- data %>% mutate(EXTREMES = case_when(
+  EXTREME_HOT_DAY == 1 ~ 'EXTREME_HOT_DAY',
+  EXTREME_COLD_DAY == 1 ~ 'EXTREME_COLD_DAY',
+  HOT_DAY == 1 ~ 'HOT_DAY',
+  COLD_DAY == 1 ~ 'COLD_DAY',
+  EXTREME_HOT_NIGHT == 1 ~ 'EXTREME_HOT_NIGHT',
+  EXTREME_COLD_NIGHT == 1 ~ 'EXTREME_COLD_NIGHT',
+  HOT_NIGHT == 1 ~ 'HOT_NIGHT',
+  COLD_NIGHT == 1 ~ 'COLD_NIGHT')
+)
 
 ###########################
 ##Join solar and rainfall##
 ###########################
+
+#Summary to check stats
+summary(rainfall_nsw)
+summary(solar_nsw)
 
 rainfall_nsw <- rainfall_nsw %>% 
   unite(DATE, Year, Month, Day, sep="-") %>%
@@ -258,8 +322,43 @@ data <- data %>%
   left_join(solar_nsw,by=c('DATE'))
 
 
-##Deduplicate
-data <- data %>% distinct()
+#######################
+##Join public holiday##
+#######################
+
+nsw_public_holiday <- holiday_aus(year(min(data$DATE)):year(max(data$DATE)), state = "NSW") %>%
+  rename(DATE=date)
+
+data <- data %>%
+  left_join(nsw_public_holiday,by=c('DATE'))
+
+data$PUBLIC_HOLIDAY <- if_else(is.na(data$holiday),0,1)
+
+#check
+data %>% filter(PUBLIC_HOLIDAY==1) %>% select(DATE,holiday) %>% unique()
+
+#######################
+##Clean up formatting##
+#######################
+
+#convert relevant col to factors
+data <- data %>% 
+  mutate(across(all_of(c("SPRING",
+                         "SUMMER",
+                         "AUTUMN",
+                         "WINTER",
+                         "DuringDay",
+                         "DaysOfWeek",
+                         "BUSINESS_DAY",
+                         "HOT_DAY",
+                         "HOT_NIGHT",
+                         "COLD_DAY",
+                         "COLD_NIGHT",
+                         "EXTREME_HOT_DAY",
+                         "EXTREME_HOT_NIGHT",
+                         "EXTREME_COLD_DAY",
+                         "EXTREME_COLD_NIGHT",
+                         "PUBLIC_HOLIDAY")), as.factor))
 
 #reference of filling nulls with interpolation
 #https://www.sciencedirect.com/science/article/pii/S0167739X21003794
@@ -282,15 +381,112 @@ MAE_MSE <- data.frame(Error_measure,Values)
 rm(MAE,MSE,Error_measure,Values)
 print(MAE_MSE)
 
-##Create boxplot of total demand by time 
+##Summary of measures from key tables
+summary(data)
+
+###########
+##Boxplot##
+###########
+
+##Create boxplot of total demand by time (year-month)
+ggplot(data) + geom_boxplot(aes(x = YEARMONTH, y = TOTALDEMAND, group = YEARMONTH))
+#Can barely see trend, will use monthly
+ggplot(data) + geom_boxplot(aes(x = as.factor(MONTH), y = TOTALDEMAND, group = as.factor(MONTH)))
+#Can identify June/July having higher energy consumption compared to other months
+#Comparing 2010 and 2021 (2022 data isn't complete)
+ggplot(data[data$YEAR==2010,]) + 
+  geom_boxplot(aes(x = as.factor(MONTH), y = TOTALDEMAND, group = as.factor(MONTH)))+
+  labs(title="2010 Total hourly demand by months")
+ggplot(data[data$YEAR==2021,]) + 
+  geom_boxplot(aes(x = as.factor(MONTH), y = TOTALDEMAND, group = as.factor(MONTH)))+
+  labs(title="2020 Total hourly demand by months")
+#Again confirmed that July/Aug having the highest demand
 
 ##Create line chart of forecast versus actual
+ggplot(data, aes(x=DATE)) + 
+  geom_line(aes(y = TOTALDEMAND), color = "darkred") + 
+  geom_line(aes(y = FINAL_FORECAST), color="steelblue", linetype="twodash") 
+#Difficult to tell trend
+#Plot via monthly
+data_mthly_agg <- data %>% group_by(YEARMONTH) %>% summarise(TOTALDEMAND = sum(TOTALDEMAND),
+                                                             FINAL_FORECAST = sum(FINAL_FORECAST))
+#Remove final period of the chart given incomplete month
+ggplot(data_mthly_agg[data_mthly_agg$YEARMONTH != '2022-08-01',], aes(x=YEARMONTH)) + 
+  geom_line(aes(y = TOTALDEMAND), color = "darkred") + 
+  geom_line(aes(y = FINAL_FORECAST), color="steelblue", linetype="twodash") 
+#Still difficult to see due to number of date breakouts, filtering to 2010 and 2021 only:
+ggplot(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,], aes(x=YEARMONTH)) + 
+  geom_line(aes(y = TOTALDEMAND), color = "darkred") + 
+  geom_line(aes(y = FINAL_FORECAST), color="steelblue", linetype="twodash") +
+  labs(title='2010')
 
-##Create line chart of residual
+ggplot(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,], aes(x=YEARMONTH)) + 
+  geom_line(aes(y = TOTALDEMAND), color = "darkred") + 
+  geom_line(aes(y = FINAL_FORECAST), color="steelblue", linetype="twodash") +
+  labs(title='2021')
+#Highest variability is still in Summer/Winter months
+
+##Create line chart of residual (2010)
+ggplot(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,], aes(x=YEARMONTH)) + 
+  geom_line(aes(y = TOTALDEMAND-FINAL_FORECAST), color = "darkred")+
+  geom_hline(yintercept=0, linetype="dashed", color = "red")+
+  labs(title='2010 Residual')
+
+##Create line chart of residual (2021)
+ggplot(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,], aes(x=YEARMONTH)) + 
+  geom_line(aes(y = TOTALDEMAND-FINAL_FORECAST), color = "darkred")+
+  geom_hline(yintercept=0, linetype="dashed", color = "red")+
+  labs(title='2021 Residual')
 
 ##Create total demand / seasonal boxplot
+ggplot(data) + 
+  geom_boxplot(aes(x = SEASON, y = TOTALDEMAND, group = SEASON)) +
+  labs(title='Demand by Season')
+#Higher demand in Winter as previously identified
 
 ##Create pairwise comparison
 
-##Create scatterplot of temperature versus prediction/actual
+##Create scatterplot of temperature versus total demand
+#Sampling at 10% for run times sake
+y <- sample_frac(data, 0.1)
+
+#base temp demand scatter
+base_demand_temp_scatter <- ggplot(data=y, aes(x=TEMPERATURE, y=TOTALDEMAND )) + geom_point(color='lightblue')
+print(base_demand_temp_scatter)
+
+#base rainfall demand scatter
+#Little to none relevance
+base_demand_rainfall_scatter <- ggplot(data=y, aes(x=DAILY_RAINFALL_AMT_MM, y=TOTALDEMAND )) + geom_point(color='lightblue')
+print(base_demand_rainfall_scatter)
+
+
+#base solar demand scatter
+#Little to none relevance
+base_demand_solar_scatter <- ggplot(data=y, aes(x=DAILY_GLBL_SOLAR_EXPOSR, y=TOTALDEMAND )) + geom_point(color='lightblue')
+print(base_demand_solar_scatter)
+
+
+#create function for scatter and color
+scatter_color <- function(y,x,color,xlab,ylab,legenedlab) { 
+  season_scatter <- ggplot(data=NULL,aes(x, y , color=color)) + 
+    geom_point() +
+    labs(x = xlab, 
+         y=ylab,
+         colour = legenedlab)
+  print(season_scatter)
+}
+
+#Total demand by temperature, coloured by seasons
+#Can keep seasonal indicator for Summer/Winter, Autumn/Spring isn't too significant visually
+scatter_color(y$TOTALDEMAND,y$TEMPERATURE,y$SEASON,"TEMPERATURE","TOTALDEMAND","SEASON")
+
+#By Extremes
+#Cold day, Extreme cold day, and hot day are more noticeable.
+scatter_color(y$TOTALDEMAND,y$TEMPERATURE,y$EXTREMES,"TEMPERATURE","TOTALDEMAND","EXTREMES") 
+
+#By public holiday
+#No noticeable difference
+scatter_color(y$TOTALDEMAND,y$TEMPERATURE,y$PUBLIC_HOLIDAY,"TEMPERATURE","TOTALDEMAND","PUBLIC_HOLIDAY")
+scatter_color(y$TOTALDEMAND,y$TEMPERATURE,y$BUSINESS_DAY,"TEMPERATURE","TOTALDEMAND","BUSINESS_DAY")
+
 
