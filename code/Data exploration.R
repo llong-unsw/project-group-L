@@ -20,6 +20,9 @@ package_list <- c(
   , "zoo"
   , "tsibble"
   , "timeDate"
+  , "gridExtra"
+  , "scales"
+  , "grid"
 )
 
 # list of packages not installed
@@ -248,11 +251,10 @@ data <- data %>%mutate(SEASON = case_when(
   MONTH %in%  3:5  ~ "AUTUMN",
   TRUE ~ "WINTER"));
 
-##Season indicator
-data$SPRING <- if_else(data$SEASON == 'SPRING',1,0)
-data$SUMMER <- if_else(data$SEASON == 'SUMMER',1,0)
-data$AUTUMN <- if_else(data$SEASON == 'AUTUMN',1,0)
-data$WINTER <- if_else(data$SEASON == 'WINTER',1,0)
+##Season indicator 
+#For Summer and Winter only due to Autumn/Spring having little correlation to actual demand
+data$summer_flag <- if_else(data$SEASON == 'SUMMER',1,0)
+data$winter_flag <- if_else(data$SEASON == 'WINTER',1,0)
 
 ##create boolean for 8am~8pm timeslot, using it as cutoff for day/night
 data <- data %>%mutate(DuringDay = case_when(
@@ -341,12 +343,15 @@ data %>% filter(PUBLIC_HOLIDAY==1) %>% select(DATE,holiday) %>% unique()
 ##Clean up formatting##
 #######################
 
+#Create additional date-hour field
+data <- data %>%
+  mutate(DATEHOUR = ymd_h(paste(DATE, HOUR)))
+
 #convert relevant col to factors
 data <- data %>% 
-  mutate(across(all_of(c("SPRING",
-                         "SUMMER",
-                         "AUTUMN",
-                         "WINTER",
+  mutate(across(all_of(c(
+                         "summer_flag",
+                         "winter_flag",
                          "DuringDay",
                          "DaysOfWeek",
                          "BUSINESS_DAY",
@@ -384,109 +389,306 @@ print(MAE_MSE)
 ##Summary of measures from key tables
 summary(data)
 
-###########
-##Boxplot##
-###########
+###########################################
+##Boxplot of Hourly total demand by month##
+###########################################
 
-##Create boxplot of total demand by time (year-month)
-ggplot(data) + geom_boxplot(aes(x = YEARMONTH, y = TOTALDEMAND, group = YEARMONTH))
-#Can barely see trend, will use monthly
-ggplot(data) + geom_boxplot(aes(x = as.factor(MONTH), y = TOTALDEMAND, group = as.factor(MONTH)))
+#Boxplot by 
+boxplot_demand_month_hist <- ggplot(data) + geom_boxplot(aes(x = as.factor(MONTH), y = TOTALDEMAND, group = as.factor(MONTH)))+
+  labs(title = "2010 Jan ~ 2022 Aug Hourly Total Demand by Month", 
+       x = "Month", 
+       y = "Total Demand") +
+  theme(legend.key.size = unit(1, 'cm'), 
+        legend.key.height = unit(0.5, 'cm'), 
+        legend.key.width = unit(0.5, 'cm'), 
+        legend.title = element_text(size=7), 
+        legend.text = element_text(size=7),
+        axis.title=element_text(size=8,face="bold")) +
+  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
+
 #Can identify June/July having higher energy consumption compared to other months
 #Comparing 2010 and 2021 (2022 data isn't complete)
-ggplot(data[data$YEAR==2010,]) + 
+boxplot_demand_month_2010 <- ggplot(data[data$YEAR==2010,]) + 
   geom_boxplot(aes(x = as.factor(MONTH), y = TOTALDEMAND, group = as.factor(MONTH)))+
-  labs(title="2010 Total hourly demand by months")
-ggplot(data[data$YEAR==2021,]) + 
+  labs(title = "2010 Hourly Total Demand by Month", 
+       x = "Month", 
+       y = "Total Demand") +
+  theme(legend.key.size = unit(1, 'cm'), 
+        legend.key.height = unit(0.5, 'cm'), 
+        legend.key.width = unit(0.5, 'cm'), 
+        legend.title = element_text(size=7), 
+        legend.text = element_text(size=7),
+        axis.title=element_text(size=8,face="bold")) +
+  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
+
+boxplot_demand_month_2021 <- ggplot(data[data$YEAR==2021,]) + 
   geom_boxplot(aes(x = as.factor(MONTH), y = TOTALDEMAND, group = as.factor(MONTH)))+
-  labs(title="2020 Total hourly demand by months")
+  labs(title = "2021 Monthly Total Demand", 
+       x = "Month", 
+       y = "Total Demand") +
+  theme(legend.key.size = unit(1, 'cm'), 
+        legend.key.height = unit(0.5, 'cm'), 
+        legend.key.width = unit(0.5, 'cm'), 
+        legend.title = element_text(size=7), 
+        legend.text = element_text(size=7),
+        axis.title=element_text(size=8,face="bold")) +
+  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
 #Again confirmed that July/Aug having the highest demand
 
-##Create line chart of forecast versus actual
-ggplot(data, aes(x=DATE)) + 
-  geom_line(aes(y = TOTALDEMAND), color = "darkred") + 
-  geom_line(aes(y = FINAL_FORECAST), color="steelblue", linetype="twodash") 
-#Difficult to tell trend
-#Plot via monthly
-data_mthly_agg <- data %>% group_by(YEARMONTH) %>% summarise(TOTALDEMAND = sum(TOTALDEMAND),
-                                                             FINAL_FORECAST = sum(FINAL_FORECAST))
-#Remove final period of the chart given incomplete month
-ggplot(data_mthly_agg[data_mthly_agg$YEARMONTH != '2022-08-01',], aes(x=YEARMONTH)) + 
-  geom_line(aes(y = TOTALDEMAND), color = "darkred") + 
-  geom_line(aes(y = FINAL_FORECAST), color="steelblue", linetype="twodash") 
-#Still difficult to see due to number of date breakouts, filtering to 2010 and 2021 only:
-ggplot(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,], aes(x=YEARMONTH)) + 
-  geom_line(aes(y = TOTALDEMAND), color = "darkred") + 
-  geom_line(aes(y = FINAL_FORECAST), color="steelblue", linetype="twodash") +
-  labs(title='2010')
+grid.arrange(boxplot_demand_month_hist,
+             boxplot_demand_month_2010,
+             boxplot_demand_month_2021,
+             ncol=1)
 
-ggplot(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,], aes(x=YEARMONTH)) + 
-  geom_line(aes(y = TOTALDEMAND), color = "darkred") + 
-  geom_line(aes(y = FINAL_FORECAST), color="steelblue", linetype="twodash") +
-  labs(title='2021')
+###########################################################
+##Create line chart of forecast versus actual 2010 & 2021##
+###########################################################
+
+#2010 ACTUAL VERSUS PREDICTION
+demand_2010 <- ggplot(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,], aes(x=YEARMONTH)) + 
+  geom_line(size=1.3, aes(y = TOTALDEMAND), color = "darkred") + 
+  geom_line(size=1.3,aes(y = FINAL_FORECAST), color="steelblue", linetype="twodash") +
+  labs(title = "2010 Monthly Total Demand", 
+       x = "Year - Month", 
+       y = "Total Demand") +
+  theme(legend.key.size = unit(1, 'cm'), 
+        legend.key.height = unit(0.5, 'cm'), 
+        legend.key.width = unit(0.5, 'cm'), 
+        legend.title = element_text(size=7), 
+        legend.text = element_text(size=7),
+        axis.title=element_text(size=8,face="bold")) +
+  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
+
+#2021 ACTUAL VERSUS PREDICTION
+demand_2021 <- ggplot(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,], aes(x=YEARMONTH)) + 
+  geom_line(size=1.3,aes(y = TOTALDEMAND), color = "darkred") + 
+  geom_line(size=1.3,aes(y = FINAL_FORECAST), color="steelblue", linetype="twodash") +
+  labs(title='2021')+
+  labs(title = "2021 Monthly Total Demand", 
+       x = "Year - Month", 
+       y = "Total Demand") +
+  theme(legend.key.size = unit(1, 'cm'), 
+        legend.key.height = unit(0.5, 'cm'), 
+        legend.key.width = unit(0.5, 'cm'), 
+        legend.title = element_text(size=7), 
+        legend.text = element_text(size=7),
+        axis.title=element_text(size=8,face="bold")) +
+  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
 #Highest variability is still in Summer/Winter months
 
-##Create line chart of residual (2010)
-ggplot(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,], aes(x=YEARMONTH)) + 
-  geom_line(aes(y = TOTALDEMAND-FINAL_FORECAST), color = "darkred")+
-  geom_hline(yintercept=0, linetype="dashed", color = "red")+
-  labs(title='2010 Residual')
+#Combine as grid
+grid.arrange(demand_2010,
+             demand_2021,
+             ncol=1)
 
-##Create line chart of residual (2021)
-ggplot(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,], aes(x=YEARMONTH)) + 
-  geom_line(aes(y = TOTALDEMAND-FINAL_FORECAST), color = "darkred")+
-  geom_hline(yintercept=0, linetype="dashed", color = "red")+
-  labs(title='2021 Residual')
+#########################################################################
+##Create 2x1 line chart of total demand/residual against month by years##
+#########################################################################
 
-##Create total demand / seasonal boxplot
+#Comparing total demand by months throughout the years
+actual_monthly_by_year <- ggplot(data_mthly_agg[data_mthly_agg$YEARMONTH != '2022-08-01',]
+       , aes(x=as.factor(month(YEARMONTH)), 
+                           y=TOTALDEMAND, 
+                           group=as.factor(year(YEARMONTH)), 
+                           color=as.factor(year(YEARMONTH)))) + 
+  geom_line(size=1.3) +
+  labs(title = "Total Energy Demand by Month", 
+       x = "Month", 
+       y = "Total Energy Demand ",
+       color = "Year") +
+  theme(legend.key.size = unit(1, 'cm'), 
+        legend.key.height = unit(0.5, 'cm'), 
+        legend.key.width = unit(0.5, 'cm'), 
+        legend.title = element_text(size=7), 
+        legend.text = element_text(size=7),
+        axis.title=element_text(size=8,face="bold")) +
+  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
+#Variability increases at highest prior season change
+
+#Comparing variability throughout the years
+AEMO_residual <- ggplot(data_mthly_agg, aes(x=as.factor(month(YEARMONTH)), 
+                           y=TOTALDEMAND-FINAL_FORECAST, 
+                           group=as.factor(year(YEARMONTH)), 
+                           color=as.factor(year(YEARMONTH)))) + 
+  geom_line(size=1.3) +
+  geom_hline(yintercept=0, linetype="dashed", color = "black") +
+  labs(title = "Monthly Residual of AEMO Prediction versus Actual Energy Demand", 
+       x = "Month", 
+       y = "AEMO Forecast - Actual Total Energy Demand",
+       color = "Year") +
+  theme(legend.key.size = unit(1, 'cm'), 
+        legend.key.height = unit(0.5, 'cm'), 
+        legend.key.width = unit(0.5, 'cm'), 
+        legend.title = element_text(size=7), 
+        legend.text = element_text(size=7),
+        axis.title=element_text(size=8,face="bold")) +
+  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
+#Variability increases at highest prior season change
+
+#Combine as grid
+grid.arrange(actual_monthly_by_year,
+             AEMO_residual,
+             ncol=1)
+
+##########################################
+##Create total demand / seasonal boxplot##
+##########################################
+
 ggplot(data) + 
   geom_boxplot(aes(x = SEASON, y = TOTALDEMAND, group = SEASON)) +
-  labs(title='Demand by Season')
+  labs(title='Demand by Season') +
+  labs(title = "Total Demand by Season", 
+       x = "Season", 
+       y = "Total Hourly Demand") +
+  theme(legend.key.size = unit(1, 'cm'), 
+        legend.key.height = unit(0.5, 'cm'), 
+        legend.key.width = unit(0.5, 'cm'), 
+        legend.title = element_text(size=7), 
+        legend.text = element_text(size=7),
+        axis.title=element_text(size=8,face="bold")) +
+  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
 #Higher demand in Winter as previously identified
 
-##Create pairwise comparison
+##############################################################
+##Create 2x2 scatter plot of Demand against different fields##
+##############################################################
 
 ##Create scatterplot of temperature versus total demand
 #Sampling at 10% for run times sake
-y <- sample_frac(data, 0.1)
+data_sample <- sample_frac(data, 0.1)
+
+#create function for scatter 
+scatter_base <- function(y,x,titlelab,xlab,ylab,legenedlab) { 
+  season_scatter <- ggplot(data=NULL,aes(x, y)) + 
+    geom_point(color='darkblue') +
+    labs(title = titlelab, 
+         x = xlab, 
+         y=ylab) +
+    theme(legend.key.size = unit(1, 'cm'), 
+          legend.key.height = unit(0.5, 'cm'), 
+          legend.key.width = unit(0.5, 'cm'), 
+          legend.title = element_text(size=7), 
+          legend.text = element_text(size=7),
+          axis.title=element_text(size=8,face="bold")) +
+    scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
+}
 
 #base temp demand scatter
-base_demand_temp_scatter <- ggplot(data=y, aes(x=TEMPERATURE, y=TOTALDEMAND )) + geom_point(color='lightblue')
-print(base_demand_temp_scatter)
+
+base_demand_temp_scatter <- scatter_base(data_sample$TOTALDEMAND,
+                                         data_sample$TEMPERATURE,
+                                         "Against Hourly Temperature",
+                                         "Average Temperature (Hourly)",
+                                         "Total Energy Demand (Hourly)")
+
+
+#Aggregate data to daily due to solar and rainfall being recorded daily
+data_daily_solar_rainfall <- data %>%
+  group_by(DATE) %>%
+  summarise(Total_daily_Demand = sum(TOTALDEMAND),
+            solar_daily = mean(DAILY_GLBL_SOLAR_EXPOSR),
+            rainfall_daily = mean(DAILY_RAINFALL_AMT_MM))
+
+data_daily_solar_rainfall_sample <- sample_frac(data_daily_solar_rainfall, 0.1)
+
 
 #base rainfall demand scatter
 #Little to none relevance
-base_demand_rainfall_scatter <- ggplot(data=y, aes(x=DAILY_RAINFALL_AMT_MM, y=TOTALDEMAND )) + geom_point(color='lightblue')
-print(base_demand_rainfall_scatter)
-
+base_demand_rainfall_scatter <- scatter_base(data_daily_solar_rainfall_sample$Total_daily_Demand,
+                                             data_daily_solar_rainfall_sample$rainfall_daily,
+                                             "Against Daily Rainfall",
+                                             "Total Rainfall (Daily)",
+                                             "Total Energy Demand (Daily)")
 
 #base solar demand scatter
 #Little to none relevance
-base_demand_solar_scatter <- ggplot(data=y, aes(x=DAILY_GLBL_SOLAR_EXPOSR, y=TOTALDEMAND )) + geom_point(color='lightblue')
-print(base_demand_solar_scatter)
+base_demand_solar_scatter <- scatter_base(data_daily_solar_rainfall_sample$Total_daily_Demand,
+                                          data_daily_solar_rainfall_sample$solar_daily,
+                                          "Against Daily Solar Exposure",
+                                          "Total Solar Exposure (Daily)",
+                                          "Total Energy Demand (Daily)")
 
+#Combine as grid
+grid.arrange(base_demand_temp_scatter,
+             base_demand_rainfall_scatter,
+             base_demand_solar_scatter,
+             ncol=2,
+             top = textGrob("Energy Demand against Various Factors",
+                            gp=gpar(fontsize=18,font=1)))
+
+
+#########################################################
+##Create 2x2 scatter plot of Demand against temperature## 
+##by different factors                                 ##
+#########################################################
 
 #create function for scatter and color
-scatter_color <- function(y,x,color,xlab,ylab,legenedlab) { 
+scatter_color <- function(y,x,color,titlelab,xlab,ylab,legenedlab) { 
   season_scatter <- ggplot(data=NULL,aes(x, y , color=color)) + 
     geom_point() +
-    labs(x = xlab, 
+    labs(title = titlelab, 
+         x = xlab, 
          y=ylab,
-         colour = legenedlab)
-  print(season_scatter)
+         colour = legenedlab) +
+    theme(legend.key.size = unit(1, 'cm'), 
+          legend.key.height = unit(0.5, 'cm'), 
+          legend.key.width = unit(0.5, 'cm'), 
+          legend.title = element_text(size=7), 
+          legend.text = element_text(size=7),
+          axis.title=element_text(size=8,face="bold")) +
+    scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
 }
+
 
 #Total demand by temperature, coloured by seasons
 #Can keep seasonal indicator for Summer/Winter, Autumn/Spring isn't too significant visually
-scatter_color(y$TOTALDEMAND,y$TEMPERATURE,y$SEASON,"TEMPERATURE","TOTALDEMAND","SEASON")
+scatter_season <- scatter_color(y$TOTALDEMAND,
+              y$TEMPERATURE,
+              y$SEASON,
+              "By Seasons",
+              "Average Temperature (Hourly)",
+              "Total Energy Demand (Hourly)",
+              "Season")
 
 #By Extremes
 #Cold day, Extreme cold day, and hot day are more noticeable.
-scatter_color(y$TOTALDEMAND,y$TEMPERATURE,y$EXTREMES,"TEMPERATURE","TOTALDEMAND","EXTREMES") 
+scatter_extreme <- scatter_color(y$TOTALDEMAND,
+              y$TEMPERATURE,
+              y$EXTREMES,
+              "By Extreme Temperatures",
+              "Average Temperature (Hourly)",
+              "Total Energy Demand (Hourly)",
+              "Extremeties") 
 
 #By public holiday
 #No noticeable difference
-scatter_color(y$TOTALDEMAND,y$TEMPERATURE,y$PUBLIC_HOLIDAY,"TEMPERATURE","TOTALDEMAND","PUBLIC_HOLIDAY")
-scatter_color(y$TOTALDEMAND,y$TEMPERATURE,y$BUSINESS_DAY,"TEMPERATURE","TOTALDEMAND","BUSINESS_DAY")
+scatter_pub_hol <- scatter_color(y$TOTALDEMAND,
+              y$TEMPERATURE,
+              y$PUBLIC_HOLIDAY,
+              "By Public Holiday",
+              "Average Temperature (Hourly)",
+              "Total Energy Demand (Hourly)",
+              "Public Holiday")
+
+#By business day
+scatter_bus_day <- scatter_color(y$TOTALDEMAND,
+              y$TEMPERATURE,
+              y$BUSINESS_DAY,
+              "By Business Day",
+              "Average Temperature (Hourly)",
+              "Total Energy Demand (Hourly)",
+              "Business Day")
+
+#Combine as grid
+grid.arrange(scatter_season,
+             scatter_extreme,
+             scatter_pub_hol,
+             scatter_bus_day,
+             ncol=2,
+             top = textGrob("Hourly Total Energy Demand against Average HourlyTemperature",
+                            gp=gpar(fontsize=18,font=1)))
+
+
+
 
 
