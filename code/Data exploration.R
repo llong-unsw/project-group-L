@@ -363,10 +363,12 @@ data <- data %>%
 nsw_public_holiday <- holiday_aus(year(min(data$DATE)):year(max(data$DATE)), state = "NSW") %>%
   rename(DATE=date)
 
-data <- data %>%
-  left_join(nsw_public_holiday,by=c('DATE'),relationship = "many-to-many")
+nsw_public_holiday <- nsw_public_holiday %>% select(DATE) %>% mutate(holiday_flag = 1) %>% unique()
 
-data$PUBLIC_HOLIDAY <- if_else(is.na(data$holiday),0,1)
+data <- data %>%
+  left_join(nsw_public_holiday,by=c('DATE'))
+
+data$PUBLIC_HOLIDAY <- if_else(is.na(data$holiday_flag),0,1)
 
 #check
 data %>% filter(PUBLIC_HOLIDAY==1) %>% select(DATE,holiday) %>% unique()
