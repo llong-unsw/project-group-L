@@ -302,10 +302,7 @@ data <- data %>% mutate(EXTREMES = case_when(
 ##Join solar and rainfall##
 ###########################
 
-#Summary to check stats
-summary(rainfall_nsw)
-summary(solar_nsw)
-
+#Combine time based fields
 rainfall_nsw <- rainfall_nsw %>% 
   unite(DATE, Year, Month, Day, sep="-") %>%
   select(DATE, `Rainfall amount (millimetres)`) %>%
@@ -319,6 +316,41 @@ solar_nsw <- solar_nsw %>%
 solar_nsw$DATE <- as.Date(solar_nsw$DATE)
 rainfall_nsw$DATE <- as.Date(rainfall_nsw$DATE)
 
+#Get only relevant timeframe
+rainfall_nsw <- rainfall_nsw[year(rainfall_nsw$DATE) > 2009 & rainfall_nsw$DATE <= '2023-08-01',]
+solar_nsw <- solar_nsw[year(solar_nsw$DATE) > 2009 & solar_nsw$DATE <= '2023-08-01',]
+
+#Summary to check stats
+summary(rainfall_nsw) #93 NA
+summary(solar_nsw) #2 NA
+
+#Filter out NA and sort by date
+rainfall_nsw <- rainfall_nsw %>% filter(!is.na(DAILY_RAINFALL_AMT_MM)) %>% arrange(DATE)
+solar_nsw <- solar_nsw %>% filter(!is.na(DAILY_GLBL_SOLAR_EXPOSR)) %>% arrange(DATE)
+
+#Determine the intervals for datematrix for totaldemand
+
+rainfall_nsw_test <- rainfall_nsw %>%  mutate(DATE_DIFF = (DATE) - lag((DATE)))
+table(rainfall_nsw_test$DATE_DIFF)
+
+solar_nsw_test <- solar_nsw %>%  mutate(DATE_DIFF = (DATE) - lag((DATE)))
+table(rainfall_nsw_test$DATE_DIFF)
+
+##Create date matrix separated by 1 day intervals
+datematrix1d <- data.frame(DATE=seq(as.POSIXct(min(totaldemand_nsw$DATETIME)), 
+                                        as.POSIXct(max(totaldemand_nsw$DATETIME)), 
+                                        by="1 day"))
+
+##Join datematrix to total demand
+rainfall_nsw <- datematrix1d %>% left_join(rainfall_nsw, by = c('DATE'))
+solar_nsw <- datematrix1d %>% left_join(solar_nsw, by = c('DATE'))
+
+#Interpolate the NA's
+rainfall_nsw$DAILY_RAINFALL_AMT_MM <- na.approx(rainfall_nsw$DAILY_RAINFALL_AMT_MM)
+solar_nsw$DAILY_GLBL_SOLAR_EXPOSR <- na.approx(solar_nsw$DAILY_GLBL_SOLAR_EXPOSR)
+
+
+#Join to base data
 data <- data %>% 
   left_join(rainfall_nsw,by=c('DATE')) %>%
   left_join(solar_nsw,by=c('DATE'))
@@ -332,7 +364,7 @@ nsw_public_holiday <- holiday_aus(year(min(data$DATE)):year(max(data$DATE)), sta
   rename(DATE=date)
 
 data <- data %>%
-  left_join(nsw_public_holiday,by=c('DATE'))
+  left_join(nsw_public_holiday,by=c('DATE'),relationship = "many-to-many")
 
 data$PUBLIC_HOLIDAY <- if_else(is.na(data$holiday),0,1)
 
@@ -443,6 +475,9 @@ grid.arrange(boxplot_demand_month_hist,
 ###########################################################
 ##Create line chart of forecast versus actual 2010 & 2021##
 ###########################################################
+#Create dataset with mothly aggregate
+data_mthly_agg <- data %>% group_by(YEARMONTH) %>% summarise(TOTALDEMAND = sum(TOTALDEMAND),
+                                                             FINAL_FORECAST = sum())
 
 #2010 ACTUAL VERSUS PREDICTION
 demand_2010 <- ggplot(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,], aes(x=YEARMONTH)) + 
@@ -642,9 +677,9 @@ scatter_color <- function(y,x,color,titlelab,xlab,ylab,legenedlab) {
 
 #Total demand by temperature, coloured by seasons
 #Can keep seasonal indicator for Summer/Winter, Autumn/Spring isn't too significant visually
-scatter_season <- scatter_color(y$TOTALDEMAND,
-              y$TEMPERATURE,
-              y$SEASON,
+scatter_season <- scatter_color(data_sample$TOTALDEMAND,
+              data_sample$TEMPERATURE,
+              data_sample$SEASON,
               "By Seasons",
               "Average Temperature (Hourly)",
               "Total Energy Demand (Hourly)",
@@ -652,9 +687,9 @@ scatter_season <- scatter_color(y$TOTALDEMAND,
 
 #By Extremes
 #Cold day, Extreme cold day, and hot day are more noticeable.
-scatter_extreme <- scatter_color(y$TOTALDEMAND,
-              y$TEMPERATURE,
-              y$EXTREMES,
+scatter_extreme <- scatter_color(data_sample$TOTALDEMAND,
+              data_sample$TEMPERATURE,
+              data_sample$EXTREMES,
               "By Extreme Temperatures",
               "Average Temperature (Hourly)",
               "Total Energy Demand (Hourly)",
@@ -662,18 +697,18 @@ scatter_extreme <- scatter_color(y$TOTALDEMAND,
 
 #By public holiday
 #No noticeable difference
-scatter_pub_hol <- scatter_color(y$TOTALDEMAND,
-              y$TEMPERATURE,
-              y$PUBLIC_HOLIDAY,
+scatter_pub_hol <- scatter_color(data_sample$TOTALDEMAND,
+              data_sample$TEMPERATURE,
+              data_sample$PUBLIC_HOLIDAY,
               "By Public Holiday",
               "Average Temperature (Hourly)",
               "Total Energy Demand (Hourly)",
               "Public Holiday")
 
 #By business day
-scatter_bus_day <- scatter_color(y$TOTALDEMAND,
-              y$TEMPERATURE,
-              y$BUSINESS_DAY,
+scatter_bus_day <- scatter_color(data_sample$TOTALDEMAND,
+              data_sample$TEMPERATURE,
+              data_sample$BUSINESS_DAY,
               "By Business Day",
               "Average Temperature (Hourly)",
               "Total Energy Demand (Hourly)",
