@@ -371,7 +371,7 @@ data <- data %>%
 data$PUBLIC_HOLIDAY <- if_else(is.na(data$holiday_flag),0,1)
 
 #check
-data %>% filter(PUBLIC_HOLIDAY==1) %>% select(DATE,holiday) %>% unique()
+# data %>% filter(PUBLIC_HOLIDAY==1) %>% select(DATE,holiday) %>% unique()
 
 #######################
 ##Clean up formatting##
