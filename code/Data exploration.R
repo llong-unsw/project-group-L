@@ -18,6 +18,7 @@ package_list <- c(
   , "data.table"
   , "crayon"
   , "zoo"
+  , "ggplot2"
 )
 
 # list of packages not installed
@@ -282,15 +283,36 @@ MAE_MSE <- data.frame(Error_measure,Values)
 rm(MAE,MSE,Error_measure,Values)
 print(MAE_MSE)
 
+
 ##Create boxplot of total demand by time 
 
+
+ggplot(data, aes(x = as.factor(HOUR), y = TOTALDEMAND, group = HOUR)) +
+      geom_boxplot() +
+    labs(title = "Boxplot of Total Demand by Hour", x = "Hour of the Day", y = "Total Demand")
 ##Create line chart of forecast versus actual
+ggplot(data, aes(x = DATETIME, y = TOTALDEMAND, group = 1)) +
+       geom_line(aes(y = FINAL_FORECAST, color = "Forecast")) +
+      labs(title = "Forecast vs Actual Total Demand", x = "Datetime", y = "Demand") +
+   scale_color_manual(values = c("Forecast" = "blue"))
+
 
 ##Create line chart of residual
+data$Residual <- data$TOTALDEMAND - data$FINAL_FORECAST
+ggplot(data, aes(x = DATETIME, y = Residual)) +
+       geom_line() +
+    labs(title = "Line Chart of Residuals", x = "Datetime", y = "Residual")
 
 ##Create total demand / seasonal boxplot
 
-##Create pairwise comparison
+ggplot(data, aes(x = SEASON, y = TOTALDEMAND)) +
+      geom_boxplot() +
+      labs(title = "Total Demand Seasonal Boxplot", x = "Season", y = "Total Demand")
+
 
 ##Create scatterplot of temperature versus prediction/actual
 
+ggplot(data, aes(x = TEMPERATURE, y = FINAL_FORECAST)) +
+       geom_point(aes(color = "Forecast"), alpha = 0.5) +
+      geom_point(aes(y = TOTALDEMAND, color = "Actual"), alpha = 0.5) + labs(title = "Scatterplot of Temperature vs Prediction/Actual", x = "Temperature", y = "Demand") +
+        scale_color_manual(values = c("Forecast" = "blue", "Actual" = "red"))
