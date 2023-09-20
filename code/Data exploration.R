@@ -369,9 +369,10 @@ data <- data %>%
   left_join(nsw_public_holiday,by=c('DATE'))
 
 data$PUBLIC_HOLIDAY <- if_else(is.na(data$holiday_flag),0,1)
+data <- data %>% select(-holiday_flag) %>% rename(pub_holiday_flag=PUBLIC_HOLIDAY)
 
 #check
-# data %>% filter(PUBLIC_HOLIDAY==1) %>% select(DATE,holiday) %>% unique()
+data %>% filter(pub_holiday_flag==1) %>% select(DATE,pub_holiday_flag) %>% unique()
 
 #######################
 ##Clean up formatting##
@@ -397,7 +398,7 @@ data <- data %>%
                          "EXTREME_HOT_NIGHT",
                          "EXTREME_COLD_DAY",
                          "EXTREME_COLD_NIGHT",
-                         "PUBLIC_HOLIDAY")), as.factor))
+                         "pub_holiday_flag")), as.factor))
 
 #reference of filling nulls with interpolation
 #https://www.sciencedirect.com/science/article/pii/S0167739X21003794
@@ -701,7 +702,7 @@ scatter_extreme <- scatter_color(data_sample$TOTALDEMAND,
 #No noticeable difference
 scatter_pub_hol <- scatter_color(data_sample$TOTALDEMAND,
               data_sample$TEMPERATURE,
-              data_sample$PUBLIC_HOLIDAY,
+              data_sample$pub_holiday_flag,
               "By Public Holiday",
               "Average Temperature (Hourly)",
               "Total Energy Demand (Hourly)",
