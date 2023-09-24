@@ -15,7 +15,7 @@ run_dependencies = F
 # run required scripts
 if (run_dependencies) {
   source("Code/01 Setup.R")
-  source("Code/Data exploration.R")
+  source("Code/02 Data exploration.R")
 }
 
 ## key parameters
