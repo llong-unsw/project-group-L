@@ -402,6 +402,15 @@ data <- data %>%
                          "EXTREME_COLD_NIGHT",
                          "pub_holiday_flag")), as.factor))
 
+#Add Month and Hour indicators as factors
+data[paste0("M", 1:12)] <- as.data.frame(t(sapply(data$MONTH, tabulate, 12)))
+data[paste0("H", 0:23)] <- as.data.frame(t(sapply(data$HOUR, tabulate, 24)))
+
+paste0("M", 1:12) 
+
+data[paste0("M", 1:12)] <- lapply(data[paste0("M", 1:12)], factor)
+data[paste0("H", 0:23)] <- lapply(data[paste0("H", 0:23)], factor)
+
 #reference of filling nulls with interpolation
 #https://www.sciencedirect.com/science/article/pii/S0167739X21003794
 #https://www.sciencedirect.com/science/article/pii/S0895435621000056
@@ -482,7 +491,7 @@ grid.arrange(boxplot_demand_month_hist,
 ###########################################################
 #Create dataset with mothly aggregate
 data_mthly_agg <- data %>% group_by(YEARMONTH) %>% summarise(TOTALDEMAND = sum(TOTALDEMAND),
-                                                             FINAL_FORECAST = sum())
+                                                             FINAL_FORECAST = sum(FINAL_FORECAST))
 
 #2010 ACTUAL VERSUS PREDICTION
 demand_2010 <- ggplot(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,], aes(x=YEARMONTH)) + 
