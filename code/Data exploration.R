@@ -9,56 +9,26 @@
 #              preparation and exploration
 #------------------------------------------------------------------------#
 
-# load packages -----------------------------------------------------------
-
-# relevant packages for script
-package_list <- c(
-  "tidyverse"
-  , "lubridate"
-  , "data.table"
-  , "crayon"
-  , "zoo"
-  , "tsibble"
-  , "timeDate"
-  , "gridExtra"
-  , "scales"
-  , "grid"
-)
-
-# list of packages not installed
-required_packages <- setdiff(
-  package_list
-  , rownames(installed.packages())
-)
-
-# install any package not installed
-lapply(required_packages, install.packages)
-
-# load required packages
-lapply(package_list, library, character.only = T)
-
-
-
 # read files --------------------------------------------------------------
 temperature_nsw    <- fread("data/temperature_nsw.csv")
 totaldemand_nsw    <- fread("data/totaldemand_nsw.csv")
 forecastdemand_nsw <- fread("data/forecastdemand_nsw.csv")
-solar_nsw <- fread("data/solar_nsw.csv")
-rainfall_nsw <- fread("data/rainfall_nsw.csv")
+solar_nsw          <- fread("data/solar_nsw.csv")
+rainfall_nsw       <- fread("data/rainfall_nsw.csv")
 
 
 # data preparation --------------------------------------------------------
 
 #Check for duplicates
-totaldemand_nsw[duplicated(totaldemand_nsw)] #39 cases of dupes
-temperature_nsw[duplicated(temperature_nsw)] #0 cases
-forecastdemand_nsw[duplicated(forecastdemand_nsw)] #0 cases
-solar_nsw[duplicated(solar_nsw)] #0 cases
-rainfall_nsw[duplicated(rainfall_nsw)] #0 cases
+primary_key_check(totaldemand_nsw, pk = "DATETIME") #39 cases of dupes
+primary_key_check(temperature_nsw, pk = "DATETIME") #0 cases
+primary_key_check(forecastdemand_nsw, pk = c("DATETIME", "PERIODID")) #0 cases
+primary_key_check(solar_nsw, pk = c("Year", "Month", "Day")) #0 cases
+primary_key_check(rainfall_nsw, pk = c("Year", "Month", "Day")) #0 cases
 
 #Deduplicate totaldemand table
 totaldemand_nsw <- totaldemand_nsw %>% unique()
-totaldemand_nsw[duplicated(totaldemand_nsw)] #no more dupes
+primary_key_check(totaldemand_nsw, pk = "DATETIME") #no more dupes
 
 ################
 ##TOTAL DEMAND##
@@ -173,6 +143,11 @@ final_forecast <- forecastdemand_nsw %>%
   select(DATETIME,
          FORECASTDEMAND) %>%
   rename('FINAL_FORECAST'='FORECASTDEMAND')
+
+dt_aemo <- final_forecast %>% 
+  mutate(datetime_hour = floor_date(ymd_hms(DATETIME), "hour")) %>% 
+  group_by(datetime_hour) %>% 
+  summarise(aemo_forecast = sum(FINAL_FORECAST))
 
 ##Check time interval
 final_forecast_test <- final_forecast %>%  mutate(DATETIME_DIFF = DATETIME - lag(DATETIME))

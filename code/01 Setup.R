@@ -6,6 +6,11 @@
 # description: loads library and custom functions 
 #------------------------------------------------------------------------#
 
+
+# clear environment -------------------------------------------------------
+rm(list = ls())
+gc()
+
 # load packages -----------------------------------------------------------
 
 # relevant packages for script
@@ -20,7 +25,11 @@ package_list <- c(
   , "glmnet"
   , "randomForest"
   , "forecast"
-  
+  , "h2o"
+  , "scales"
+  , "grid"
+  , "gridExtra"
+  , "fastDummies"
 )
 
 # list of packages not installed
@@ -33,11 +42,22 @@ required_packages <- setdiff(
 lapply(required_packages, install.packages)
 
 # load required packages
-lapply(package_list, library, character.only = T) %>% 
-  
-  # don't print on console  
-  invisible()
+suppressMessages(
+  invisible(
+    lapply(package_list, library, character.only = T) 
+  )
+)  
 
+# initiate h2o for hyperparameter tuning
+h2o.init(max_mem_size = "2g") # max 2 gigabytes
+
+# specify functions
+year <- lubridate::year
+month <- lubridate::month
+day <- lubridate::day
+hour <- lubridate::hour
+minute <- lubridate::minute
+select <- dplyr::select
 
 # custom functions --------------------------------------------------------
 
@@ -77,26 +97,212 @@ primary_key_check <- function(df, pk) {
   
 }
 
-compute_mape <- function(actual,pred){
-  mean(abs((actual - pred)/actual))
+compute_mape <- function(actual, pred){
+  mean(
+    abs(
+      (actual - pred)/actual
+    )
+  )
 }
 
-compute_mse <- function(actual,pred) {
+compute_mse <- function(actual, pred) {
   mean(
     (actual - pred)^2
     , na.rm = TRUE
+  )
+}
+
+compute_mae <- function(actual, pred) {
+  mean(
+    abs(actual - pred)
+  )
+}
+
+compute_rmse <- function(actual, pred) {
+  compute_mse(actual, pred) %>% 
+    sqrt() 
+}
+
+compute_rsquared <- function(actual, pred) {
+  rss <- sum((actual - pred)^2) # residual sum of squares
+  tss <- sum((actual - mean(actual))^2) # total sum of squares
+  
+  1 - rss/tss
+}
+
+summarise_model_performance <- function(
+    actual
+    , pred
+    , model_name = NULL
+    , format = T
+) {
+  
+  # create table of performance metrics
+  data.table(
+    "model_name"  = model_name
+    , "MAPE"      = compute_mape(actual, pred)
+    , "MSE"       = compute_mse(actual, pred)
+    , "RMSE"      = compute_rmse(actual, pred)
+    , "MAE"       = compute_mae(actual, pred)
+    , "R-Squared" = compute_rsquared(actual, pred)
   ) %>% 
-    sqrt()
+    
+    # format if specified
+    {
+      if(format) {
+        .[, `:=` (
+          MAPE          = label_percent(accuracy = 1e-2)(MAPE)
+          , MSE         = label_comma()(MSE)
+          , RMSE        = label_comma()(RMSE)
+          , MAE         = label_comma()(MAE)
+          , `R-Squared` = label_percent(accuracy = 1e-2)(`R-Squared`)
+        )
+        ]
+      }
+    } %>% 
+    
+    # return object
+    .[]
 }
 
-compute_mae <- function() {
+plot_predictions <- function(
+    # model outputs  
+  actual
+  , pred
   
+  # start and end date of data
+  , start_date = "2016-08-01"
+  , end_date   = "2017-07-31" 
+  
+  # model name (for title)
+  , model = "lasso"
+  
+  # filter to month year for more clarity
+  , input_month = 1
+  , input_year = 2017
+) {
+  
+  # ensure number of rows are the same 
+  if (nrow(actual) != nrow(pred)) {
+    stop(
+      paste0("Number of rows in actual ("
+             , nrow(actual)
+             , ") and pred ("
+             , nrow(pred)
+             , ") need to be identical"
+      )
+    )
+  }
+  
+  datetime_seq <- seq(
+    from = as.POSIXct(start_date)
+    , to = as.POSIXct(paste0(end_date, " 23:00:00"))
+    , by = 60 * 60 # every hour
+  ) 
+  
+  # combine data into one table
+  p <- data.table(
+    datetime_hour = datetime_seq
+    , actual = pull(as.data.table(actual))
+    , pred   = pull(as.data.table(pred)) 
+  ) %>%
+    
+    # filter to specified month and year
+    .[month(datetime_hour) == input_month & year(datetime_hour) == input_year] %>% 
+    
+    # create ggplot
+    ggplot(., aes(x = datetime_hour)) + 
+    
+    # plot for actuals
+    geom_line(aes(y = actual, colour = "actual")) + 
+    
+    # plot for predictions
+    geom_line(aes(y = pred, colour = "pred")) +
+    
+    # plot labels
+    labs(
+      x = "Datetime (hour)"
+      , y = "Electricity demand"
+      , title = paste0(
+        "Actual vs. predicted demand using "
+        , model
+        , " in "
+        , month(input_month, label = T), " ", input_year
+      )
+    ) +
+    
+    scale_y_continuous(labels = label_number(suffix = "k", scale = 1e-3)) +
+    
+    # set theme
+    theme_classic()
+  
+  return(p)
 }
 
-compute_mpe <- function() {
+model_rf <- function(
+    # data and column splits
+  training_data
+  , test_data
+  , x_cols
+  , y_cols
   
+  # tuning specificities
+  , rf_grid
+  , rf_search_criteria
+  , id = 1
+  , seed_num = 123
+) {
+  
+  # grid identifier
+  rf_grid_id <- paste0("rf_grid", id)
+  
+  # perform hyperparameter tuning
+  rf_models <- h2o.grid(
+    grid_id = rf_grid_id
+    , algorithm = "randomForest"
+    , x = x_cols
+    , y = y_cols 
+    , seed = seed_num
+    , training_frame = training_data
+    , hyper_params = rf_grid
+    , search_criteria = rf_search_criteria
+  )
+  
+  # extract the best model
+  rf_grid_performance <- h2o.getGrid(
+    grid_id = rf_grid_id
+    , sort_by = "mse"
+    , decreasing = F
+  )
+  
+  rf_best_model <- h2o.getModel(rf_grid_performance@model_ids[[1]])
+  
+  ## create predictions
+  rf_pred_training <- h2o.predict(rf_best_model, newdata = training_data) 
+  rf_pred_test     <- h2o.predict(rf_best_model, newdata = test_data) 
+  
+  
+  ## assess model performance
+  rf_metrics <- rbind(
+    summarise_model_performance(training_data[, y_cols], rf_pred_training, "training")
+    , summarise_model_performance(test_data[, y_cols], rf_pred_test, "test")
+  )
+  
+  # plot variance importance
+  rf_var <- h2o.varimp(rf_best_model)
+  
+  # collect key outputs
+  out <- list(
+    best_model = rf_best_model
+    , metrics = rf_metrics
+    , var = rf_var
+    , pred = list(
+      train = rf_pred_training
+      , test = rf_pred_test
+    )
+  )
+  
+  # return key elements
+  return(out)
 }
 
-compute_rsquared <- function() {
-  
-}

@@ -3,19 +3,32 @@
 #
 # author: Louis
 # 
-# description: loads library and custom functions 
+# description: modelling component of electricity demand
 #------------------------------------------------------------------------#
 
+
+# set up ------------------------------------------------------------------
+
+# flag to run dependencies (only first time)
+run_dependencies = F
+
 # run required scripts
-source("Code/01 Setup.R")
-source("Code/Data exploration.R")
+if (run_dependencies) {
+  source("Code/01 Setup.R")
+  source("Code/Data exploration.R")
+}
 
+## key parameters
 
+# split data (remaining will be in holdout set)
+TRAINING_CUTOFF = "2016-08-01" # cutoff date for training set
+TEST_CUTOFF     = "2017-08-01" # cutoff date for test set
 
+# set of lagged variables to consider
+LAG_SET = c(1:5, 24)
+SEED_NUM = 123
 
-# setup ---------------------------------------------------------------
-
-# __data prep -------------------------------------------------------------
+# data prep -------------------------------------------------------------
 
 ## aggregate data to an hourly level
 data %>% 
@@ -26,89 +39,57 @@ data %>%
   # make a copy
   data.table::copy() %>% 
   
-  # round datetime hour from datetime
-  .[, DATETIME_HOUR := floor_date(ymd_hms(DATEHOUR), "hour")] %>% 
-  
-  # convert indicator variables to factor for aggregation in the next step
-  mutate(
-    across(
-      where(is.factor)
-      , ~as.numeric(as.character(.))
-    )
-  ) %>% 
-  
-  # summarise to an hourly level for modelling
+  # select required columns
   .[
     , .(
-      TOTALDEMAND = sum(TOTALDEMAND, na.rm = T)
-      , TEMPERATURE = mean(TEMPERATURE, na.rm = T)
+      DATETIME_HOUR = DATEHOUR
+      , HOUR
+      , MONTH
       
-      # as these values are daily, can take the mean over an hour
-      , RAINFALL = mean(DAILY_RAINFALL_AMT_MM, na.rm = T)
-      , SOLAR_EXPOSURE = mean(DAILY_GLBL_SOLAR_EXPOSR, na.rm = T)
+      , TOTALDEMAND
+      , TEMPERATURE
       
-      # these flags should be consistent throughout the hour,
-      # but aggregate to ensure uniqueness just in case
-      , summer_flag = max(summer_flag)
-      , winter_flag = max(winter_flag)
-      , DuringDay = max(DuringDay)
-      , BUSINESS_DAY = max(BUSINESS_DAY)
-      
-      # if at any point of the hour, temperature exceeds set threshold for these 
-      # classifications, set the full hour under this classification
-      , HOT_DAY = max(HOT_DAY)
-      , HOT_NIGHT = max(HOT_NIGHT)
-      , COLD_DAY = max(COLD_DAY)
-      , COLD_NIGHT = max(COLD_NIGHT)
-      , EXTREME_HOT_DAY = max(EXTREME_HOT_DAY)
-      , EXTREME_HOT_NIGHT = max(EXTREME_HOT_NIGHT)
-      , EXTREME_COLD_DAY = max(EXTREME_COLD_DAY)
-      , EXTREME_COLD_NIGHT = max(EXTREME_COLD_NIGHT)
-      , PUBLIC_HOLIDAY = max(PUBLIC_HOLIDAY)
+      , RAINFALL = DAILY_RAINFALL_AMT_MM
+      , SOLAR_EXPOSURE = DAILY_GLBL_SOLAR_EXPOSR
+      , HOT_DAY
+      , HOT_NIGHT
+      , COLD_DAY
+      , COLD_NIGHT
+      , EXTREME_HOT_DAY
+      , EXTREME_HOT_NIGHT
+      , EXTREME_COLD_DAY 
+      , EXTREME_COLD_NIGHT
+      , PUBLIC_HOLIDAY = pub_holiday_flag
     )
-    
-    # aggregate by datetime rounded to the nearest hour
-    , keyby = DATETIME_HOUR
   ] %>% 
+  
+  .[, weekday := lubridate::wday(DATETIME_HOUR, week_start = 1)] %>% 
+  
+  dummy_cols(
+    select_columns = c("MONTH", "weekday", "HOUR")
+    , remove_first_dummy = T
+  ) %>% 
+
+  # remove columns after dummies are created
+  .[, `:=` (
+    HOUR = NULL
+    , weekday = NULL
+    , MONTH = NULL
+  )
+  ] %>% 
+  
+  .[order(DATETIME_HOUR)] %>% 
   
   # save output
   force() -> dt_demand_hour
 
-# # convert dummy variables back to factor type
-# factor_cols <- c(
-#   "SUMMER"
-#   , "WINTER"
-#   , "DuringDay"
-#   , "BUSINESS_DAY"
-#   , "HOT_DAY"
-#   , "HOT_NIGHT"
-#   , "COLD_DAY"
-#   , "COLD_NIGHT"
-#   , "EXTREME_HOT_DAY"
-#   , "EXTREME_HOT_NIGHT"
-#   , "EXTREME_COLD_DAY"
-#   , "EXTREME_COLD_NIGHT"
-#   , "PUBLIC_HOLIDAY"
-# )
-# 
-# dt_demand_hour[
-#   , (factor_cols) := lapply(.SD, as.factor)
-#   , .SDcols = factor_cols
-# ]
-
-# list of independent and dependent variables
-x_cols <- c(
-  "TEMPERATURE"
-  , "summer_flag"
-  , "winter_flag"
-  , "DuringDay"
-  , "BUSINESS_DAY"
-  , "PUBLIC_HOLIDAY"
-  , "RAINFALL"
-  , "SOLAR_EXPOSURE"
-)
-
-y_cols <- "TOTALDEMAND"
+data %>% 
+  
+  as.data.table() %>% 
+  
+  .[, .(datetime_hour = DATEHOUR, aemo_demand = FINAL_FORECAST)] %>% 
+  
+  force() -> dt_aemo
 
 ## add split between training, test and holdout sets
 # start with hourly table
@@ -123,10 +104,10 @@ dt_demand_hour %>%
   .[, `:=` (
     model_set = fcase(
       # if before Aug 2016, set as training set
-      demand_date < as.Date("2016-08-01"), "training"
+      demand_date < as.Date(TRAINING_CUTOFF), "training"
       
       # if between Aug 2016 and Aug 2017, set as test set
-      , demand_date < as.Date("2017-08-01"), "test"
+      , demand_date < as.Date(TEST_CUTOFF), "test"
       
       # otherwise if Aug 2017 or after, set as holdout set
       , default = "holdout"
@@ -141,113 +122,79 @@ dt_demand_hour %>%
   # save output  
   force() -> dt_model
 
+## create variables for lagged demands
+lapply(LAG_SET, function(x) {
+  dt_model[, paste0("demand_lag_", x) := lag(TOTALDEMAND, x)]
+})
 
-# __time series -----------------------------------------------------------
+# start from time period where there is no missing lag data
+dt_model <- dt_model[-c(1:max(LAG_SET)), ]
 
-## convert to time series object
+# list of independent and dependent variables
+x_cols <- c(
+  "TEMPERATURE"
+  , "HOT_DAY"
+  , "HOT_NIGHT"
+  , "COLD_DAY"
+  , "COLD_NIGHT"
+  , "EXTREME_HOT_DAY"
+  , "EXTREME_HOT_NIGHT"
+  , "EXTREME_COLD_DAY"
+  , "EXTREME_COLD_NIGHT"
+  , "PUBLIC_HOLIDAY"
+  , "RAINFALL"
+  , "SOLAR_EXPOSURE"
+  , paste0("HOUR_", 1:23)
+  , paste0("weekday_", 2:7)
+  , paste0("MONTH_", 2:12)
+  , paste0("demand_lag_", LAG_SET)
+)
 
-# placeholder: fill any na's with zero
-dt_model[is.na(dt_model)] <- 0
-
-dt_model %>% 
-  
-  # filter to 2016 for better visibility
-  # .[lubridate::year(DATETIME_HOUR) == 2016] %>%
-  
-  # select required columns
-  .[
-    , .SD
-    , .SDcols = c(
-      # time element
-      "DATETIME_HOUR"
-      
-      # response variable
-      , y_cols
-    )
-  ] %>% 
-  
-  # convert to time series object
-  as_tsibble(index = "DATETIME_HOUR") %>% 
-  as.ts(frequency = 24 * 365) %>% # number of data points per year
-  
-  # save output
-  force() -> ts_demand
-
-
-## decompose into trend, seasonality and error
-ts_decomp <- stl(ts_demand, s.window = "p")
-plot(ts_decomp)
-
-## correlation with previous states
-par(mfrow = c(2, 1))
-acf(ts_demand) # autocorrelation
-pacf(ts_demand) # partial autocorrelation
-
-
-## compare raw and deseasonalised trends 
-ts_decomp_adj <- seasadj(ts_decomp)
-
-par(mfrow = c(2, 1))
-plot(ts_demand, type="l")  # original series
-plot(ts_decomp_adj, type="l") # deseasonalised series
-
-## de-trend the data
-# estimate required order of differentiating
-num_diff <- nsdiffs(ts_demand)
-
-ts_demand %>% 
-  
-  # # take the log transformation to stabilise variance
-  # log() %>% 
-  
-  # apply difference
-  diff(num_diff) %>% 
-  
-  force() -> ts_diff
-
-# compare difference
-par(mfrow = c(2, 1))
-plot(ts_demand, type="l")  # original series
-plot(ts_diff, type="l") # deseasonalised series
-
-## time delay embedding
-lag_order <- 24 # 24 hours of lag
-horizon <- 1 # forecast horizon
-
-# include the last 24 hours of data as variables
-ts_embed <- embed(ts_diff, lag_order)
-
-# add on other variables
-dt_model %>% 
-  
-  .[-c(1:(lag_order)), ] %>% 
-  
-  # select required columns
-  .[, .SD, .SDcols = x_cols] %>% 
-  
-  # convert to matrix form
-  as.matrix() %>% 
-  
-  force() -> x_mat
-
-# combine both lagged variables + external variables
-x_mat_final <- cbind(ts_embed, x_mat)
+# dependent variable
+y_cols <- "TOTALDEMAND"
 
 # lasso regression --------------------------------------------------------
-# TODO: scale variables
+factor_cols = c(
+  "HOT_DAY"
+  , "HOT_NIGHT"
+  , "COLD_DAY"
+  , "COLD_NIGHT"
+  , "EXTREME_HOT_DAY"
+  , "EXTREME_HOT_NIGHT"
+  , "EXTREME_COLD_DAY"
+  , "EXTREME_COLD_NIGHT"
+  , "PUBLIC_HOLIDAY"
+  , paste0("HOUR_", 1:23)
+  , paste0("weekday_", 2:7)
+  , paste0("MONTH_", 2:12)
+)
 
+model_cols <- c(x_cols, y_cols)
+
+dt_model %>% 
+  
+  data.table::copy() %>% 
+  
+  .[, (factor_cols) := lapply(.SD, as.numeric), .SDcols = factor_cols] %>% 
+  
+  .[, (model_cols) := lapply(.SD, scale), .SDcols = model_cols] %>% 
+  
+  force() -> dt_lasso
+
+# split into training and test datasets
+lasso_training_x <- dt_lasso[model_set == "training", .SD, .SDcols = x_cols] %>% as.matrix()
+lasso_training_y <- dt_lasso[model_set == "training", .SD, .SDcols = y_cols] %>% as.matrix()
+lasso_test_x     <- dt_lasso[model_set == "test"    , .SD, .SDcols = x_cols] %>% as.matrix()
+lasso_test_y     <- dt_lasso[model_set == "test"    , .SD, .SDcols = y_cols] %>% as.matrix()
 
 ## set of lambdas to test
-lambda_grid <- 10 ^ seq(-3, 3, by = 0.2)
+lambda_grid <- 10 ^ seq(-1, 2, by = 0.2)
 
-# set inputs as matrices for lasso regression
-lasso_x <- as.matrix(dt_lasso[, .SD, .SDcols = x_cols])
-lasso_y <- as.matrix(dt_lasso[, .SD, .SDcols = y_cols])
 
 # perform k-fold cross validation to determine best lambda
 lasso_cv <- cv.glmnet(
-  x = lasso_x[idx_split$training[1]:idx_split$test[2], ]
-  , y = lasso_y[idx_split$training[1]:idx_split$test[2], ]
+  x = lasso_training_x
+  , y = lasso_training_y
   , alpha = 1 # specification fo lasso regression
   # , lambda = lambda_grid
   , nfolds = 5
@@ -262,56 +209,231 @@ plot(lasso_cv)
 
 # run model with min lambda
 lasso_best_model <- glmnet(
-  x = lasso_x[idx_split$training[1]:idx_split$test[2], ]
-  , y = lasso_y[idx_split$training[1]:idx_split$test[2], ]
+  x = lasso_training_x
+  , y = lasso_training_y
   , alpha = 1 # specification fo lasso regression
   , lambda = lasso_lambda_min
 )
 
 # inspect coefficients
-lasso_best_model$beta
+print(lasso_best_model$beta)
 
 # lambda pathway plot
 plot(
-  lasso_cv$glmnet.fit 
+  lasso_cv$glmnet.fit
   , "lambda"
   , label = F
 )
 
-lasso_demand_train <- predict(lasso_best_model, lasso_x[idx_split$training[1]:idx_split$test[2], ])
+# predict using test set
+lasso_pred_scaled <- predict(
+  lasso_best_model
+  , lasso_test_x
+)
 
-dt_lasso[idx_split$training[1]:idx_split$test[2]] %>% 
+# unscale data
+demand_mean <- mean(dt_model$TOTALDEMAND)
+demand_sd <- sd(dt_model$TOTALDEMAND)
+lasso_pred <- (lasso_pred_scaled * demand_sd) + demand_mean
+
+
+# performance metrics
+summarise_model_performance(
+  actual = dt_model[model_set == "test", TOTALDEMAND]
+  , pred = lasso_pred
+  , model_name = "lasso"
+)
+
+# compare fitted with actuals 
+plot_predictions(
+  actual = dt_model[model_set == "test", .(TOTALDEMAND)]
+  , pred = lasso_pred
+  , model = "lasso"
+) 
+
+# arima -------------------------------------------------------------------
+
+## assumptions
+# 1. stationary data
+# 2. univariate
+
+ts_demand <- ts(
+  data %>% 
+    
+    # ungroup grouped variables
+    ungroup() %>% 
+    
+    # select training set
+    filter(DATEHOUR < as.Date(TRAINING_CUTOFF)) %>% 
+    
+    # select demand from dataframe
+    select(TOTALDEMAND) 
   
-  cbind(., lasso_demand_train) %>% 
-  
-  .[year(DATETIME_HOUR) == 2018 & month(DATETIME_HOUR) == 1] %>% 
-  
-  ggplot(., mapping = aes(x = DATETIME_HOUR)) + 
-  
-  geom_line(aes(y = TOTALDEMAND)) + 
-  geom_line(aes(y = s0))
+  , frequency = 24 * 365.25 # 24 hours x 365.25 days in a year
+)  
+
+## exploratory data analysis
+# 1. autocorrelation
+# 2. cyclic behaviour
+# 3. trend estimation and decomposition
+
+
+# decompose into seasonality, trend and noise
+ts_decomp <- decompose(ts_demand)
+plot(ts_decomp)
+
+# correlation with previous states
+par(mfrow = c(2, 1))
+acf(ts_demand, lag.max = 48) # autocorrelation
+pacf(ts_demand, lag.max = 48) # partial autocorrelation
+
+## modelling
+# arima_best_fit <- list(aicc = Inf) # start with max aicc
+# 
+# for (i in 1:max(LAG_SET)) {
+#   
+#   # automatically fit best arima model
+#   arima_fit <- auto.arima(
+#     ts_demand
+#     , xreg = fourier(ts_demand, K = i) # fourier models to handle long periods of seasonality
+#     , seasonal = F # seasonal models only
+#   )
+#   
+#   # if aicc improves, update best model
+#   if (arima_fit$aicc < arima_best_fit$aicc) {
+#     arima_best_fit <- arima_fit
+#     best_k <- i
+#   } else {
+#     break
+#   }
+# }
+
+# function advised from https://robjhyndman.com/hyndsight/forecasting-weekly-data/
+arima_model <- tbats(ts_demand)
+
+# inspect model
+print(arima_model)
+
+# forecast over test set period
+test_set_length <- dt_model[model_set == "test", .N]
+
+arima_forecast <- forecast(
+  arima_model
+  , h = test_set_length
+)
+
+plot(arima_forecast)
+
+# performance metrics
+summarise_model_performance(
+  actual = dt_model[model_set == "test", TOTALDEMAND]
+  , pred = arima_forecast$mean
+  , model_name = "ARIMA"
+)
+
+# compare fitted with actuals 
+plot_predictions(
+  actual = dt_model[model_set == "test", .(TOTALDEMAND)]
+  , pred = data.table(arima_forecast$mean)
+  , model = "ARIMA"
+) 
+
+# support vector regression -----------------------------------------------
 
 
 
 
 # random forest -----------------------------------------------------------
-set.seed(123)
-
 
 ## split into training and test 
-set_idx <- list(
-  training = 1:(dt_model[model_set == "training", .I] - lag_order)
-  , test = rownames(dt_model[model_set == "test"]) %>% 
-    rownames() %>% 
-    as.numeric()
-  - lag_order
-  , holdout = seq(
-    dt_model[model_set == "test", .N] + 1
-    , dt_model[model_set == "holdout", .N]
-  ) - lag_order
+rf_train <- dt_model[model_set == "training", .SD, .SDcols = model_cols] %>% as.h2o()
+rf_test  <- dt_model[model_set == "test"    , .SD, .SDcols = model_cols] %>% as.h2o()
+
+## perform hyperparameter tuning
+# set hyperparameter grid
+rf_hyper_grid <- list(
+  ntrees = seq(100, 500, by = 100)
+  , mtries = 3:5
+  , sample_rate = c(0.5, 0.8, by = 0.1)
+  , max_depth = 5:10
 )
 
-x_train_rf <- x_mat_final[set_idx$training, ]
+# adjust search criteria to control runtime
+rf_search_criteria <- list(
+  strategy = "RandomDiscrete"
+  
+  # stops after 10 min
+  , max_runtime_secs = 600
+  
+  # stops if mse has not improved after 10 models
+  , stopping_metric = "mse"
+  , stopping_tolerance = 1e-4
+  , stopping_rounds = 5
+)
 
-randomForest()
+## run on base model (all factors included)
+rf_model_1 <- model_rf(
+  training_data = rf_train
+  , test_data = rf_test
+  , x_cols = x_cols
+  , y_cols = y_cols
+  , rf_grid = rf_hyper_grid
+  , rf_search_criteria = rf_search_criteria
+  , id = 7
+  , seed_num = SEED_NUM
+)
+
+# inspect outputs
+rf_model_1$metrics
+h2o.varimp_plot(rf_model_1$best_model, num_of_features = 20)
+
+par(mfrow = c(2, 1))
+
+plot_predictions(
+  actual = rf_test[, y_cols]
+  , pred = rf_model_1$pred$test
+  , model = "random forest"
+  , input_month = 1
+  , input_year = 2017
+)
+
+plot_predictions(
+  actual = rf_test[, y_cols]
+  , pred = dt_aemo[datetime_hour >= as.Date(TRAINING_CUTOFF) & datetime_hour < as.Date(TEST_CUTOFF)]
+  , model = "aemo"
+  , input_month = 1
+  , input_year = 2017
+)
+
+## subset features based on variance importance
+x_new <- rf_model_1$var %>% 
+  
+  # arbitrary cutoff for feature selection
+  filter(scaled_importance >= 0.01) %>% 
+  
+  # get list of variables
+  pull(variable)
+
+# re-run model
+rf_model_2 <- model_rf(
+  training_data = rf_train
+  , test_data = rf_test
+  , x_cols = x_new
+  , y_cols = y_cols
+  , rf_grid = rf_hyper_grid
+  , rf_search_criteria = rf_search_criteria
+  , id = 2
+  , seed_num = SEED_NUM
+)
+
+# inspect outputs
+rf_model_2$metrics
+h2o.varimp_plot(rf_model_2$best_model, num_of_features = 20)
+
+plot_predictions(
+  actual = rf_test[, y_cols]
+  , pred = rf_model_2$pred$test
+  , model = "random forest"
+)
+
 
