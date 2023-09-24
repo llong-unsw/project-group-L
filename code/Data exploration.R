@@ -404,12 +404,15 @@ data <- data %>%
 
 #Add Month and Hour indicators as factors
 data[paste0("M", 1:12)] <- as.data.frame(t(sapply(data$MONTH, tabulate, 12)))
-data[paste0("H", 0:23)] <- as.data.frame(t(sapply(data$HOUR, tabulate, 24)))
-
-paste0("M", 1:12) 
-
 data[paste0("M", 1:12)] <- lapply(data[paste0("M", 1:12)], factor)
-data[paste0("H", 0:23)] <- lapply(data[paste0("H", 0:23)], factor)
+
+data <- data %>% 
+  mutate(dummy = 1) %>% 
+  pivot_wider(names_from = HOUR, values_from = dummy,names_glue = "HOUR_{HOUR}", values_fill = 0) 
+data$HOUR <- hour(data$DATEHOUR)
+
+
+#data[paste0("H", 0:23)] <- lapply(data[paste0("H", 0:23)], factor)
 
 #reference of filling nulls with interpolation
 #https://www.sciencedirect.com/science/article/pii/S0167739X21003794
