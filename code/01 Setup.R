@@ -30,6 +30,7 @@ package_list <- c(
   , "grid"
   , "gridExtra"
   , "fastDummies"
+  , "e1071"
 )
 
 # list of packages not installed
@@ -49,7 +50,7 @@ suppressMessages(
 )  
 
 # initiate h2o for hyperparameter tuning
-h2o.init(max_mem_size = "2g") # max 2 gigabytes
+h2o.init(max_mem_size = "5g") # max 5 gigabytes
 
 # specify functions
 year <- lubridate::year
@@ -170,33 +171,33 @@ plot_predictions <- function(
   actual
   , pred
   
-  # start and end date of data
-  , start_date = "2016-08-01"
-  , end_date   = "2017-07-31" 
+  # start and end date of data - default to holdout set
+  , start_date = "2020-08-01"
+  , end_date   = "2022-08-01" 
   
   # model name (for title)
   , model = "lasso"
   
   # filter to month year for more clarity
   , input_month = 1
-  , input_year = 2017
+  , input_year = 2021
 ) {
   
-  # ensure number of rows are the same 
-  if (nrow(actual) != nrow(pred)) {
+  # ensure lengths are the same 
+  if (length(actual) != length(pred)) {
     stop(
-      paste0("Number of rows in actual ("
-             , nrow(actual)
+      paste0("Number of elements in actual ("
+             , length(actual)
              , ") and pred ("
-             , nrow(pred)
+             , length(pred)
              , ") need to be identical"
       )
     )
   }
   
   datetime_seq <- seq(
-    from = as.POSIXct(start_date)
-    , to = as.POSIXct(paste0(end_date, " 23:00:00"))
+    from = as.POSIXct(paste0(start_date, "01:00:00"))
+    , to = as.POSIXct(paste0(end_date, " 00:00:00"))
     , by = 60 * 60 # every hour
   ) 
   
@@ -206,6 +207,8 @@ plot_predictions <- function(
     , actual = pull(as.data.table(actual))
     , pred   = pull(as.data.table(pred)) 
   ) %>%
+    
+    suppressWarnings() %>% 
     
     # filter to specified month and year
     .[month(datetime_hour) == input_month & year(datetime_hour) == input_year] %>% 
@@ -284,8 +287,8 @@ model_rf <- function(
   
   ## assess model performance
   rf_metrics <- rbind(
-    summarise_model_performance(training_data[, y_cols], rf_pred_training, "training")
-    , summarise_model_performance(test_data[, y_cols], rf_pred_test, "test")
+    summarise_model_performance(training_data[, y_cols], rf_pred_training, paste0("training_", id))
+    , summarise_model_performance(test_data[, y_cols], rf_pred_test, paste0("test_", id))
   )
   
   # plot variance importance
