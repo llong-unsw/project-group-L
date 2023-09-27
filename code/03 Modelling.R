@@ -450,7 +450,7 @@ if (update_models) {
     , y_cols = y_cols
     , rf_grid = rf_hyper_grid
     , rf_search_criteria = rf_search_criteria
-    , id = 7
+    , id = 1
     , seed_num = SEED_NUM
   )
   
@@ -482,12 +482,12 @@ if (update_models) {
   )
   
   # save model
-  saveRDS(rf_list, "model/random_forest.RDS")
+  saveRDS(rf_list, "models/random_forest.RDS")
   
 }
 
 # read random forest models
-rf_list <- readRDS("model/random_forest.RDS")
+rf_list <- readRDS("models/random_forest.RDS")
 rf_model_1 <- rf_list$model_1
 rf_model_2 <- rf_list$model_2
 
