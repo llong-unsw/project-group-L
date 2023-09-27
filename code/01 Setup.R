@@ -242,6 +242,53 @@ plot_predictions <- function(
   return(p)
 }
 
+model_svr <- function(
+    training_data
+    , test_data
+    , model_data
+    , param_elsilon
+    , param_cost
+    , param_kernel = "linear" # use linear to control runtime
+    , id = 1
+) {
+  
+  # run svr model
+  svr_model <- svm(
+    TOTALDEMAND ~ TEMPERATURE + demand_lag_1
+    , data = training_data
+    , kernel = param_kernel 
+    , cost = param_cost
+    , epsilon = param_elsilon
+  )
+  
+  # fit in test set
+  svr_fit_scaled <- predict(
+    svr_model
+    , newdata = test_data[, .(TOTALDEMAND, TEMPERATURE, demand_lag_1)]
+  )
+  
+  # unscale data
+  demand_mean <- mean(model_data$TOTALDEMAND)
+  demand_sd <- sd(model_data$TOTALDEMAND)
+  svr_fit <- (svr_fit_scaled * demand_sd) + demand_mean
+  
+  # performance metrics
+  svr_performance <- summarise_model_performance(
+    actual =  model_data[model_set == "test", TOTALDEMAND]
+    , pred = svr_fit
+    , model_name = paste0("svr_", id)
+  )
+  
+  # return object
+  return(
+    list(
+      model = svr_model
+      , fitted_vals = svr_fit
+      , performance = svr_performance
+    )
+  )
+}
+
 model_rf <- function(
     # data and column splits
   training_data
