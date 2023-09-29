@@ -9,6 +9,38 @@
 #              preparation and exploration
 #------------------------------------------------------------------------#
 
+# load packages -----------------------------------------------------------
+
+# relevant packages for script
+package_list <- c(
+  "tidyverse"
+  , "lubridate"
+  , "data.table"
+  , "crayon"
+  , "zoo"
+  , "tsibble"
+  , "timeDate"
+  , "gridExtra"
+  , "scales"
+  , "grid"
+  , "patchwork"
+  , "GGally"
+)
+
+# list of packages not installed
+required_packages <- setdiff(
+  package_list
+  , rownames(installed.packages())
+)
+
+# install any package not installed
+lapply(required_packages, install.packages)
+
+# load required packages
+lapply(package_list, library, character.only = T)
+
+
+
 # read files --------------------------------------------------------------
 temperature_nsw    <- fread("data/temperature_nsw.csv")
 totaldemand_nsw    <- fread("data/totaldemand_nsw.csv")
@@ -703,5 +735,159 @@ grid.arrange(scatter_season,
 
 
 
+
+# Create separate scatterplots for each season
+season_colors <- c("SPRING" = "green", "SUMMER" = "red", "AUTUMN" = "orange", "WINTER" = "blue")
+scatterplots <- lapply(unique(data$SEASON), function(season) {
+  p <- ggplot(data[data$SEASON == season, ], aes(x = TEMPERATURE, y = TOTALDEMAND, color = SEASON)) +
+    geom_point(alpha = 0.5) +
+    scale_color_manual(values = season_colors) +
+    labs(title = paste("Scatterplot for", season), x = "Temperature", y = "Total Demand")
+  return(p)
+})
+
+# Combine the scatterplots into a grid
+grid <- wrap_plots(scatterplots, ncol = 2)
+
+# Display the grid
+grid
+# Create a pairplot with correlations
+pair_plot <- ggpairs(data, 
+                     columns = c("TOTALDEMAND", "TEMPERATURE"), 
+                     title = "Pairplot of TOTALDEMAND vs TEMPERATURE",
+                     mapping = aes(color = SEASON), 
+                     lower = list(continuous = "points"),
+                     axisLabels = "show"
+)
+
+# Print the pairplot
+print(pair_plot)
+
+# create mutivariate analyis plot  with correlations
+pair_plot_multivariate <- ggpairs(data, 
+                                  columns = c("TOTALDEMAND", "DAILY_RAINFALL_AMT_MM", "DAILY_GLBL_SOLAR_EXPOSR"),
+                                  title = "Multivariate Pairplot of Total Demand, Rainfall, and Solar Exposure",
+                                  mapping = aes(color = SEASON),  # Color by season (adjust as needed)
+                                  upper = "blank",
+                                  diag = "blank",
+                                  lower = list(continuous = "points"),
+                                  axisLabels = "show"
+)
+
+# Print the pair plot
+print(pair_plot_multivariate)
+# Lagging plot vs total demand
+
+
+# Define the lag values you want to explore
+lags <- c(1, 2, 3, 4, 5)  # Add or adjust lag values as needed
+
+# Create a data frame to store lagged correlations
+lagged_correlations <- data.frame(Lag = lags)
+
+# Function to calculate lagged correlations
+calculate_lagged_correlations <- function(data, variable, lag) {
+  lagged_variable <- data[[variable]][1:(nrow(data) - lag)]
+  lagged_demand <- data$TOTALDEMAND[(lag + 1):nrow(data)]
+  correlation <- cor(lagged_variable, lagged_demand, use = "complete.obs")
+  return(correlation)
+}
+
+# Calculate lagged correlations for solar exposure
+variable_solar <- "DAILY_GLBL_SOLAR_EXPOSR"
+lagged_correlations$Solar_Exposure_Correlation <- sapply(lags, function(lag) {
+  calculate_lagged_correlations(data, variable_solar, lag)
+})
+
+# Calculate lagged correlations for rainfall
+variable_rainfall <- "DAILY_RAINFALL_AMT_MM"
+lagged_correlations$Rainfall_Correlation <- sapply(lags, function(lag) {
+  calculate_lagged_correlations(data, variable_rainfall, lag)
+})
+
+# Create separate plots for solar exposure and rainfall
+plot_solar <- ggplot(lagged_correlations, aes(x = Lag, y = Solar_Exposure_Correlation)) +
+  geom_line() +
+  labs(title = "Lagged Correlations for Solar Exposure",
+       x = "Lag (Hours)", y = "Correlation") +
+  theme_minimal()
+
+plot_rainfall <- ggplot(lagged_correlations, aes(x = Lag, y = Rainfall_Correlation)) +
+  geom_line() +
+  labs(title = "Lagged Correlations for Rainfall",
+       x = "Lag (Hours)", y = "Correlation") +
+  theme_minimal()
+
+# Arrange and display both plots side by side
+grid.arrange(plot_solar, plot_rainfall, ncol = 2)
+
+# create a plot lagging correlation vs season
+
+# Filter data by season
+seasons <- unique(data$SEASON)
+
+# Function to calculate lagged correlations
+calculate_lagged_correlations <- function(data, variable, lag) {
+  lagged_variable <- data[[variable]][1:(nrow(data) - lag)]
+  lagged_demand <- data$TOTALDEMAND[(lag + 1):nrow(data)]
+  correlation <- cor(lagged_variable, lagged_demand, use = "complete.obs")
+  return(correlation)
+}
+
+# Create a data frame to store lagged correlations
+lags <- 1:24  # Example lag values from 1 to 24 hours
+lagged_correlations <- data.frame(Lag = lags)
+
+# Calculate lagged correlations for each season and variable (solar and rainfall)
+for (season in seasons) {
+  filtered_data <- data %>% filter(SEASON == season)
+  
+  # Calculate lagged correlations for solar exposure
+  variable_solar <- "DAILY_GLBL_SOLAR_EXPOSR"
+  lagged_correlations[paste("Solar_Exposure_Correlation", season, sep = "_")] <- sapply(
+    lags,
+    function(lag) {
+      calculate_lagged_correlations(filtered_data, variable_solar, lag)
+    }
+  )
+  
+  # Calculate lagged correlations for rainfall
+  variable_rainfall <- "DAILY_RAINFALL_AMT_MM"
+  lagged_correlations[paste("Rainfall_Correlation", season, sep = "_")] <- sapply(
+    lags,
+    function(lag) {
+      calculate_lagged_correlations(filtered_data, variable_rainfall, lag)
+    }
+  )
+}
+
+# Create two plots side by side
+plot_solar <- ggplot(lagged_correlations, aes(x = Lag)) +
+  geom_line(aes(y = Solar_Exposure_Correlation_SPRING), color = "green", linetype = "solid") +
+  geom_line(aes(y = Solar_Exposure_Correlation_SUMMER), color = "red", linetype = "dashed") +
+  geom_line(aes(y = Solar_Exposure_Correlation_AUTUMN), color = "orange", linetype = "dotted") +
+  geom_line(aes(y = Solar_Exposure_Correlation_WINTER), color = "blue", linetype = "dotdash") +
+  labs(
+    title = "Lagged Correlations for Solar Exposure by Season",
+    x = "Lag (Hours)",
+    y = "Correlation"
+  ) +
+  theme_minimal()
+
+plot_rainfall <- ggplot(lagged_correlations, aes(x = Lag)) +
+  geom_line(aes(y = Rainfall_Correlation_SPRING), color = "green", linetype = "solid") +
+  geom_line(aes(y = Rainfall_Correlation_SUMMER), color = "red", linetype = "dashed") +
+  geom_line(aes(y = Rainfall_Correlation_AUTUMN), color = "orange", linetype = "dotted") +
+  geom_line(aes(y = Rainfall_Correlation_WINTER), color = "blue", linetype = "dotdash") +
+  labs(
+    title = "Lagged Correlations for Rainfall by Season",
+    x = "Lag (Hours)",
+    y = "Correlation"
+  ) +
+  theme_minimal()
+
+# Display the two plots side by side
+library(gridExtra)
+grid.arrange(plot_solar, plot_rainfall, ncol = 2)
 
 

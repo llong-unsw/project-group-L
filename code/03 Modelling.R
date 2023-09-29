@@ -10,7 +10,7 @@
 # set up ------------------------------------------------------------------
 
 # flag to run dependencies (only first time)
-run_dependencies = F
+run_dependencies = T
 
 # run required scripts
 if (run_dependencies) {
@@ -20,6 +20,7 @@ if (run_dependencies) {
 
 ## key parameters
 
+# overwrite saved models
 update_models <- F
 
 # split data (remaining will be in holdout set)
@@ -167,6 +168,10 @@ factor_cols = c(
 
 model_cols <- c(x_cols, y_cols)
 
+# get mean and variance for unscaling
+demand_mean <- dt_model[, mean(TOTALDEMAND)]
+demand_sd   <- dt_model[, sd(TOTALDEMAND)]
+
 # lasso regression --------------------------------------------------------
 dt_model %>% 
   
@@ -242,103 +247,6 @@ plot(
 )
 
 
-
-# # arima -------------------------------------------------------------------
-# 
-# ## assumptions
-# # 1. stationary data
-# # 2. univariate
-# 
-# ts_demand <- ts(
-#   data %>% 
-#     
-#     # ungroup grouped variables
-#     ungroup() %>% 
-#     
-#     # only need to split into training and holdout set
-#     filter(DATEHOUR < as.Date(TEST_CUTOFF)) %>% 
-#     
-#     # select demand from dataframe
-#     select(TOTALDEMAND) 
-#   
-#   , frequency = 24 * 365.25 # 24 hours x 365.25 days in a year
-# )  
-# 
-# ## exploratory data analysis
-# # 1. autocorrelation
-# # 2. cyclic behaviour
-# # 3. trend estimation and decomposition
-# 
-# 
-# # decompose into seasonality, trend and noise
-# ts_decomp <- decompose(ts_demand)
-# plot(ts_decomp)
-# 
-# # correlation with previous states
-# par(mfrow = c(2, 1))
-# acf(ts_demand, lag.max = 48) # autocorrelation
-# pacf(ts_demand, lag.max = 48) # partial autocorrelation
-# 
-# ## modelling
-# arima_best_fit <- list(aicc = Inf) # start with max aicc
-# 
-# # for (i in 1:max(LAG_SET)) {
-# # 
-# #   # automatically fit best arima model
-# #   arima_fit <- auto.arima(
-# #     ts_demand
-# #     , xreg = fourier(ts_demand, K = i) # fourier models to handle long periods of seasonality
-# #     , seasonal = F # seasonal models only
-# #   )
-# # 
-# #   # if aicc improves, update best model
-# #   if (arima_fit$aicc < arima_best_fit$aicc) {
-# #     arima_best_fit <- arima_fit
-# #     best_k <- i
-# #   } else {
-# #     break
-# #   }
-# # }
-# 
-# # automatically fit best arima model
-# arima_fit <- auto.arima(
-#   ts_demand
-#   , xreg = fourier(ts_demand, K = 8) # fourier models to handle long periods of seasonality
-#   , seasonal = F # seasonal models only
-# )
-# 
-# # forecast over holdout set period
-# test_set_length <- dt_model[model_set == "holdout", .N]
-# 
-# arima_forecast <- forecast(
-#   arima_fit
-#   , xreg = fourier(
-#     ts_demand
-#     , K = 8
-#     , h = test_set_length
-#   )
-# )
-# 
-# plot(arima_forecast)
-# 
-# # performance metrics
-# summarise_model_performance(
-#   actual = dt_model[model_set == "holdout", TOTALDEMAND]
-#   , pred = length(arima_forecast$mean)
-#   , model_name = "ARIMA"
-# )
-# 
-# # compare fitted with actuals 
-# plot_predictions(
-#   actual = dt_model[model_set == "holdout", .(TOTALDEMAND)]
-#   , pred = data.table(arima_forecast$mean)
-#   , model = "ARIMA"
-#   , input_year = 2021
-#   , input_month = 1
-# ) 
-
-
-
 # support vector regression -----------------------------------------------
 
 # use inputs defined in lasso as variables are scaled
@@ -347,35 +255,40 @@ svr_train <- dt_lasso[
   model_set == "training" & DATETIME_HOUR >= as.Date("2014-08-01")
   , .SD, .SDcols = model_cols
 ]
-svr_test  <- dt_lasso[model_set == "test" , .SD, .SDcols = model_cols]
+svr_test  <- dt_lasso[model_set == "test", .SD, .SDcols = model_cols]
 
 # combination of elsilon and cost parameters to test
 svr_grid <- CJ(
-  elsilon = seq(0, 1, by = 0.5)
-  , cost = 10^seq(0, 2, 1)
-)
+  epsilon = seq(0, 1, by = 0.5)
+  , kernel = c("linear", "radial")
+) %>% 
+  
+  .[, id := .I]
 
 if (update_models) {
   # run svr models with each combination of tuning parameters
-  svr_models <- lapply(1:svr_grid[, .N], function(x) {
-    elsilon = svr_grid[x, elsilon]
-    cost    = svr_grid[x, cost]
+  lapply(1:svr_grid[, .N], function(x) {
+    epsilon = svr_grid[x, epsilon]
+    kernel  = svr_grid[x, kernel]
     
-    model_svr(
-      svr_train
-      , svr_test
-      , dt_model
-      , elsilon
-      , cost
+    svr_model = model_svr(
+      training_data = svr_train
+      , test_data = svr_test
+      , model_data = dt_model
+      , param_epsilon = epsilon
+      , param_kernel = kernel
       , id = x
     )
     
+    # save each model separately due to large file size
+    saveRDS(svr_model, paste0("models/svr_", x, ".RDS"))
   })
-  
-  saveRDS(svr_models, "models/svr.RDS")
 }
 
-svr_models <- readRDS("models/svr.RDS")
+# read models
+svr_models <- lapply(1:svr_grid[, .N], function(x) {
+  readRDS(paste0("models/svr_", x, ".RDS"))
+})
 
 # summary table comparing performances with different tuning parameters
 rbindlist(
@@ -386,37 +299,43 @@ rbindlist(
     , svr_models[[4]]$performance
     , svr_models[[5]]$performance
     , svr_models[[6]]$performance
-    , svr_models[[7]]$performance
-    , svr_models[[8]]$performance
-    , svr_models[[9]]$performance
   )
 )
 
 # compare fitted with actuals 
+# best model
 plot_predictions(
   actual = dt_model[model_set == "test", TOTALDEMAND]
-  , pred = 
-  , model = "svr"
+  , pred = svr_models[[2]]$fitted_vals
+  , model = "svr model 2"
   , start_date = as.Date("2018-08-01")
   , end_date = as.Date("2020-08-01")
   , input_year = 2019
   , input_month = 1
 ) 
 
+# worst model
+plot_predictions(
+  actual = dt_model[model_set == "test", TOTALDEMAND]
+  , pred = svr_models[[6]]$fitted_vals
+  , model = "svr model 6"
+  , start_date = as.Date("2018-08-01")
+  , end_date = as.Date("2020-08-01")
+  , input_year = 2019
+  , input_month = 1
+) 
+
+# save best model
+svr_best_model <- svr_models[[2]]$model
+
 # random forest -----------------------------------------------------------
 
 ## split into training and test for hyperparameter testing 
-rf_train <- dt_model[model_set == "training", .SD, .SDcols = model_cols] %>% as.h2o()
-rf_test  <- dt_model[model_set == "test"    , .SD, .SDcols = model_cols] %>% as.h2o()
+rf_train <- dt_model[model_set == "training", .SD, .SDcols = model_cols]
+rf_test  <- dt_model[model_set == "test"    , .SD, .SDcols = model_cols]
 
 # get actuals in test set
-actuals_demand_test <- rf_test[, y_cols]
-
-# get aemo test set
-aemo_demand_test <- dt_aemo[
-  datetime_hour <= TEST_CUTOFF & datetime_hour > TRAINING_CUTOFF
-  , .(aemo_demand)
-]
+actuals_demand_test <- rf_test[, .SD, .SDcols = y_cols]
 
 ## perform hyperparameter tuning
 # set hyperparameter grid
@@ -434,7 +353,7 @@ rf_search_criteria <- list(
   # stops after 10 min
   , max_runtime_secs = 600
   
-  # stops if mse has not improved after 10 models
+  # stops if mse has not improved after 5 models
   , stopping_metric = "mse"
   , stopping_tolerance = 1e-4
   , stopping_rounds = 5
@@ -444,8 +363,8 @@ if (update_models) {
 
   ## run on base model (all factors included)
   rf_model_1 <- model_rf(
-    training_data = rf_train
-    , test_data = rf_test
+    training_data = rf_train %>% as.h2o()
+    , test_data = rf_test %>% as.h2o()
     , x_cols = x_cols
     , y_cols = y_cols
     , rf_grid = rf_hyper_grid
@@ -465,8 +384,8 @@ if (update_models) {
   
   # re-run model
   rf_model_2 <- model_rf(
-    training_data = rf_train
-    , test_data = rf_test
+    training_data = rf_train %>% as.h2o()
+    , test_data = rf_test %>% as.h2o()
     , x_cols = x_new
     , y_cols = y_cols
     , rf_grid = rf_hyper_grid
@@ -491,41 +410,10 @@ rf_list <- readRDS("models/random_forest.RDS")
 rf_model_1 <- rf_list$model_1
 rf_model_2 <- rf_list$model_2
 
-# inspect outputs of model 1
-rf_model_1$metrics
-h2o.varimp_plot(rf_model_1$best_model, num_of_features = 20)
-
-par(mfrow = c(2, 1))
-
-plot_predictions(
-  actual = actuals_demand_test
-  , pred = rf_model_1$pred$test
-  , model = "random forest"
-  , start_date = as.Date("2018-01-01")
-  , end_date   = as.Date("2020-01-01")
-  , input_month = 1
-  , input_year = 2019
-)
-
-plot_predictions(
-  actual = actuals_demand_test
-  , pred = aemo_demand_test
-  , model = "aemo"
-  , start_date = as.Date("2018-01-01")
-  , end_date   = as.Date("2020-01-01")
-  , input_month = 1
-  , input_year = 2019
-)
-
-# inspect outputs of model 2
-rf_model_2$metrics
-h2o.varimp_plot(rf_model_2$best_model, num_of_features = 20)
-
-plot_predictions(
-  actual = rf_test[, y_cols]
-  , pred = rf_model_2$pred$test
-  , model = "random forest"
-)
+# inspect variance importance plots of both models
+par(mfrow = c(1, 2))
+h2o.varimp_plot(rf_model_1$best_model, num_of_features = 30)
+h2o.varimp_plot(rf_model_2$best_model, num_of_features = 30)
 
 # compare performances
 rbind(
@@ -533,8 +421,35 @@ rbind(
   , rf_model_2$metrics
 )
 
+# plot fitted vs. actuals
+par(mfrow = c(2, 1))
+
+plot_predictions(
+  actual = actuals_demand_test
+  , pred = rf_model_1$pred$test
+  , model = "random forest 1"
+  , start_date = as.Date("2018-01-01")
+  , end_date   = as.Date("2020-01-01")
+  , input_month = 1
+  , input_year = 2019
+)
+
+plot_predictions(
+  actual = actuals_demand_test
+  , pred = rf_model_2$pred$test
+  , model = "random forest 2"
+  , start_date = as.Date("2018-01-01")
+  , end_date   = as.Date("2020-01-01")
+  , input_month = 1
+  , input_year = 2019
+)
+
+# save final model
+rf_best_model <- rf_model_2$best_model
+
 # model selection ---------------------------------------------------------
 
+# set up holdout data set
 aemo_holdout_demand <- dt_aemo[datetime_hour > TEST_CUTOFF, aemo_demand]
 actual_holdout_demand <- dt_model[model_set == "holdout", TOTALDEMAND]
 
@@ -542,7 +457,7 @@ actual_holdout_demand <- dt_model[model_set == "holdout", TOTALDEMAND]
 dt_aemo_summary <- summarise_model_performance(
   actual = actual_holdout_demand
   , pred = aemo_holdout_demand
-  , model_name = "aemo"
+  , model_name = "aemo (benchmark)"
 )
 
 plot_aemo <- plot_predictions(
@@ -564,10 +479,7 @@ lasso_pred_scaled <- predict(
 )
 
 # unscale data
-demand_mean <- mean(dt_model$TOTALDEMAND)
-demand_sd <- sd(dt_model$TOTALDEMAND)
 lasso_pred <- (lasso_pred_scaled * demand_sd) + demand_mean
-
 
 # performance metrics
 dt_lasso_summary <- summarise_model_performance(
@@ -583,9 +495,57 @@ plot_lasso <- plot_predictions(
   , model = "lasso"
 ) 
 
-# arima
-
 # support vector regression
+svr_holdout <- dt_lasso[model_set == "holdout", .SD, .SDcols = model_cols]
+
+# fit in test set
+svr_pred_scaled <- predict(
+  svr_best_model
+  , newdata = svr_holdout[
+    , .(TOTALDEMAND
+        , TEMPERATURE
+        , demand_lag_1
+        , demand_lag_2
+        , demand_lag_3
+        , demand_lag_4
+        , demand_lag_5
+        , demand_lag_24)
+  ]
+)
+
+# unscale data
+svr_pred <- (svr_pred_scaled * demand_sd) + demand_mean
+
+# performance metrics
+dt_svr_summary <- summarise_model_performance(
+  actual = actual_holdout_demand
+  , pred = svr_pred
+  , model_name = "svr"
+)
 
 # random forest
+rf_holdout <- dt_model[model_set == "holdout", .SD, .SDcols = model_cols] %>% as.h2o()
+rf_pred <- h2o.predict(rf_best_model, newdata = rf_holdout) 
 
+# performance metrics
+dt_rf_summary <- summarise_model_performance(
+  actual = rf_holdout[, "TOTALDEMAND"]
+  , pred = rf_pred
+  , model_name = "random forest"
+)
+
+plot_predictions(
+  actual = actual_holdout_demand
+  , pred = rf_pred
+  , model = "random forest"
+  , input_year = 2020
+  , input_month = 11
+) 
+
+
+rbind(
+  dt_aemo_summary
+  , dt_lasso_summary
+  , dt_svr_summary
+  , dt_rf_summary
+)

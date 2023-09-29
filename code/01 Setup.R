@@ -131,6 +131,10 @@ compute_rsquared <- function(actual, pred) {
   1 - rss/tss
 }
 
+unscale_data <- function(vec, dt, metric) {
+  
+}
+
 summarise_model_performance <- function(
     actual
     , pred
@@ -183,18 +187,6 @@ plot_predictions <- function(
   , input_year = 2021
 ) {
   
-  # ensure lengths are the same 
-  if (length(actual) != length(pred)) {
-    stop(
-      paste0("Number of elements in actual ("
-             , length(actual)
-             , ") and pred ("
-             , length(pred)
-             , ") need to be identical"
-      )
-    )
-  }
-  
   datetime_seq <- seq(
     from = as.POSIXct(paste0(start_date, "01:00:00"))
     , to = as.POSIXct(paste0(end_date, " 00:00:00"))
@@ -246,25 +238,41 @@ model_svr <- function(
     training_data
     , test_data
     , model_data
-    , param_elsilon
-    , param_cost
-    , param_kernel = "linear" # use linear to control runtime
+    , param_epsilon
+    , param_kernel = "linear" 
     , id = 1
 ) {
   
   # run svr model
   svr_model <- svm(
-    TOTALDEMAND ~ TEMPERATURE + demand_lag_1
+    TOTALDEMAND 
+    ~ TEMPERATURE
+    + demand_lag_1
+    + demand_lag_2
+    + demand_lag_3
+    + demand_lag_4
+    + demand_lag_5
+    + demand_lag_24
+    
     , data = training_data
     , kernel = param_kernel 
-    , cost = param_cost
-    , epsilon = param_elsilon
+    , epsilon = param_epsilon
+    , tolerance = 0.1 # help control runtime
   )
   
   # fit in test set
   svr_fit_scaled <- predict(
     svr_model
-    , newdata = test_data[, .(TOTALDEMAND, TEMPERATURE, demand_lag_1)]
+    , newdata = test_data[
+      , .(TOTALDEMAND
+          , TEMPERATURE
+          , demand_lag_1
+          , demand_lag_2
+          , demand_lag_3
+          , demand_lag_4
+          , demand_lag_5
+          , demand_lag_24)
+    ]
   )
   
   # unscale data
@@ -290,7 +298,7 @@ model_svr <- function(
 }
 
 model_rf <- function(
-    # data and column splits
+  # data and column splits
   training_data
   , test_data
   , x_cols
@@ -347,8 +355,8 @@ model_rf <- function(
     , metrics = rf_metrics
     , var = rf_var
     , pred = list(
-      train = rf_pred_training
-      , test = rf_pred_test
+      train = as.data.table(rf_pred_training)
+      , test = as.data.table(rf_pred_test)
     )
   )
   
