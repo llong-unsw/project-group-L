@@ -4,3 +4,4 @@
 .Ruserdata
 *.csv
 .Rapp.history
+*.RDataTmp1
