@@ -402,11 +402,15 @@ if (update_models) {
   
   # save model
   saveRDS(rf_list, "models/random_forest.RDS")
-  
+  h2o.saveModel(object = rf_model_1$best_model, path = "models", force = TRUE)
+  h2o.saveModel(object = rf_model_2$best_model, path = "models", force = TRUE)
 }
 
 # read random forest models
 rf_list <- readRDS("models/random_forest.RDS")
+rf_list$model_1$best_model <- h2o.loadModel("models/rf_grid1_model_132")
+rf_list$model_2$best_model <- h2o.loadModel("models/rf_grid2_model_23")
+
 rf_model_1 <- rf_list$model_1
 rf_model_2 <- rf_list$model_2
 
@@ -525,7 +529,7 @@ dt_svr_summary <- summarise_model_performance(
 
 # random forest
 rf_holdout <- dt_model[model_set == "holdout", .SD, .SDcols = model_cols] %>% as.h2o()
-rf_pred <- h2o.predict(rf_best_model, newdata = rf_holdout) 
+rf_pred <- h2o.predict(rf_model_2$best_model, newdata = rf_holdout) 
 
 # performance metrics
 dt_rf_summary <- summarise_model_performance(

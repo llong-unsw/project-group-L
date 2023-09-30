@@ -30,6 +30,21 @@ knitr::opts_chunk$set(message = F)
 knitr::opts_chunk$set(warning = F)
 ```
 
+```{r code_setup, include=FALSE}
+## INSTRUCTIONS
+
+# 1. if need to set working directory, do so below
+# setwd(<insert working directory here>)
+
+# 2. open Code/03 Modelling and check the parameters
+# in particular, 
+
+# run required scripts
+source("Code/01 Setup.R")
+source("Code/02 Data exploration.R")
+source("Code/03 Modelling.R")
+```
+
 \newpage
 
 # Abstract
@@ -69,6 +84,57 @@ What assumptions are you making on the data?
 # Exploratory Data Analysis
 
 # Analysis and Results
+
+## Modelling setup
+
+Step 1 - split into training, test and validation sets.
+
+- Show date range of each set
+- Explain purpose of each set
+
+```{r modelling_setup}
+
+
+
+```
+
+Step 2 - define lagged variables
+
+Step 3 - remove datapoints with missing lagged variables (total removal of one day of data)
+
+## LASSO
+
+Explain scaling variables
+
+Explain use of cross-validation of the combined training and test set
+
+Justify use of nfolds = 5
+
+Show lambda grid considered
+
+Show best lambda selected (lambda vs. MSE chart)
+
+Show shrinkage of coefficients
+
+Show performance on training set
+
+Show example chart of fitted vs. actuals
+
+## Support vector regression (SVR)
+
+Explain scaling variables
+
+Justify features selected
+
+Explain tuning process
+
+Show hyperparameters considered
+
+Show performance of each model and overall model chosen
+
+## Random forest
+
+## Final model selection
 
 # Discussion
 
