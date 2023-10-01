@@ -782,6 +782,10 @@ grid.arrange(base_demand_temp_scatter,
 ###############################
 ##Figure 7 Correlation matrix##
 ###############################
+#create spring and autumn flag for correlation
+data_Excl_202208$spring_flag <- if_else(data_Excl_202208$SEASON == 'SPRING',1,0)
+data_Excl_202208$autumn_flag <- if_else(data_Excl_202208$SEASON == 'AUTUMN',1,0)
+
 dat_correl <- data_Excl_202208 %>%
   ungroup() %>%
   select(TOTALDEMAND,
@@ -871,6 +875,14 @@ ggcorrplot(corr, p.mat = cor_pmat(dat_hour_correl),
 # Create a data frame to store lagged correlations
 lags <- 1:24  # Example lag values from 1 to 24 hours
 lagged_correlations <- data.frame(Lag = lags)
+
+# Function to calculate lagged correlations
+calculate_lagged_correlations <- function(data, variable, lag) {
+  lagged_variable <- data[[variable]][1:(nrow(data) - lag)]
+  lagged_demand <- data$TOTALDEMAND[(lag + 1):nrow(data)]
+  correlation <- cor(lagged_variable, lagged_demand, use = "complete.obs")
+  return(correlation)
+}
 
 # Calculate lagged correlations for total demand 
 variable_demand <- "TOTALDEMAND"
