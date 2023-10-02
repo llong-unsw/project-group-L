@@ -489,18 +489,7 @@ dt_rf_summary <- summarise_model_performance(
   , model_name = "random forest"
 )
 
-plot_predictions(
-  actual = actual_holdout_demand
-  , pred = rf_pred
-  , model = "random forest"
-  , input_year = 2020
-  , input_month = 11
-) 
 
 
-rbind(
-  dt_aemo_summary
-  , dt_lasso_summary
-  , dt_svr_summary
-  , dt_rf_summary
-)
+
+

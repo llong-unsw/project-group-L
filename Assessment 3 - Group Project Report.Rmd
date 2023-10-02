@@ -438,7 +438,80 @@ plot_predictions(
 
 ## Final model selection
 
+The final model selection criteria is evaluated by the performance metrics using the holdout set. This is done to simulate a real world forecasting environment to predict unseen data. The AEMO demand forecast was also included as a benchmark to compare our models with. 
+
+```{r final_performance}
+rbind(
+  dt_aemo_summary
+  , dt_lasso_summary
+  , dt_svr_summary
+  , dt_rf_summary
+) %>% 
+  rename(
+    `Model name` = model_name
+  ) %>% 
+  knitr::kable(
+    .
+    , format = "latex"
+    , caption = "Random forest regression model performances"
+  )  %>%
+  kable_styling(latex_options = "HOLD_position")
+```
+
+All three models considered in this report managed to out-perform the AEMO benchmark. This can be attributed to the way our models were set up to prioritise predictive performance, while AEMO's model equally considers performance and interpretability.  
+
+Interestingly, the random forest model continued to deteriorate in performance as the dataset moved away from the training data, showing some indication of overfitting to the training data. The SVR had the strongest performance overall with over 98% accuracy, and is the final model chosen for our project, being able to outperform aemo by +1.4% accuracy. 
+
+Taking a closer look at one of the months in the holdout set, it can be observed that most of the forecasting error in the aemo model occurs at the peaks and troughs of demand. 
+
+```{r aemo_final_plot, out.height = "40%", out.width = "100%"}
+plot_predictions(
+  actual = actual_holdout_demand
+  , pred = aemo_holdout_demand
+  , model = "aemo"
+  , input_year = 2021
+  , input_month = 11
+) 
+```
+
+The lasso model fitted in this project shows a similar performance to the aemo model, with slightly more accurate predictions overall. 
+
+```{r lasso_final_plot, out.height = "40%", out.width = "100%"}
+plot_predictions(
+  actual = actual_holdout_demand
+  , pred = lasso_pred
+  , model = "lasso"
+  , input_year = 2021
+  , input_month = 11
+) 
+```
+
+As reaffirmed by the performance metrics summary, the SVR also looks the most accurate when comparing with actuals in November 2021 as well. 
+
+```{r svr_final_plot, out.height = "40%", out.width = "100%"}
+plot_predictions(
+  actual = actual_holdout_demand
+  , pred = svr_pred
+  , model = "SVR"
+  , input_year = 2021
+  , input_month = 11
+) 
+```
+Finally, the random forest model seemed to have the most trouble forecasting the troughs in November 2021, over-estimating energy demands in these periods overall. 
+
+```{r rf_final_plot, out.height = "40%", out.width = "100%"}
+plot_predictions(
+  actual = actual_holdout_demand
+  , pred = rf_pred
+  , model = "random forest"
+  , input_year = 2021
+  , input_month = 11
+) 
+```
+
 # Discussion
+
+TODO: flesh this section out
 
 Potential improvements to consider:
 
