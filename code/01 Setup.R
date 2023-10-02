@@ -31,6 +31,8 @@ package_list <- c(
   , "gridExtra"
   , "fastDummies"
   , "e1071"
+  , "knitr"
+  , "kableExtra"
 )
 
 # list of packages not installed
@@ -129,10 +131,6 @@ compute_rsquared <- function(actual, pred) {
   tss <- sum((actual - mean(actual))^2) # total sum of squares
   
   1 - rss/tss
-}
-
-unscale_data <- function(vec, dt, metric) {
-  
 }
 
 summarise_model_performance <- function(

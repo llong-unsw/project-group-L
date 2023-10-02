@@ -19,30 +19,32 @@ output:
 ```{r setup, include=FALSE}
 ## default options of rendering code chunks
 
-# hide underlying code 
-knitr::opts_chunk$set(include = F)
-
-# show outputs
-knitr::opts_chunk$set(echo = T)
+# show outputs but not code
+knitr::opts_chunk$set(echo = F)
 
 # hide messages and warnings
 knitr::opts_chunk$set(message = F)
 knitr::opts_chunk$set(warning = F)
+
+# figure settings
+knitr::opts_chunk$set(fig.align = "centre")
+knitr::opts_chunk$set(fig.pos = "H")
 ```
 
 ```{r code_setup, include=FALSE}
-## INSTRUCTIONS
+## this code chunk runs the dependency scripts of this report
+## INSTRUCTIONS:
 
-# 1. if need to set working directory, do so below
+# 1. if need to set working directory to the repo, do so below
 # setwd(<insert working directory here>)
 
 # 2. open Code/03 Modelling and check the parameters
-# in particular, 
+# in particular, whether to refresh the models 
 
 # run required scripts
-source("Code/01 Setup.R")
-source("Code/02 Data exploration.R")
-source("Code/03 Modelling.R")
+source("Code/01 Setup.R") # load packages + custom functions
+source("Code/02 Data exploration.R") # data processing
+source("Code/03 Modelling.R") # modelling
 ```
 
 \newpage
@@ -83,62 +85,371 @@ What assumptions are you making on the data?
 
 # Exploratory Data Analysis
 
+\newpage
+
 # Analysis and Results
 
 ## Modelling setup
 
-Step 1 - split into training, test and validation sets.
+A few pre-processing steps were required before performing the demand forecast modelling, which included defining additional features, removing data where lagged variables do not exist, and splitting the dataset into training, test and holdout sets.
 
-- Show date range of each set
-- Explain purpose of each set
+As our models will prioritise predictive performance over interpretability, it is important to include any potential features which may help in more accurately predicting energy demand. However, potential issues such as model bias or overfitting may arise, so an appropriate experimental setup was implemented to ensure the final model selected would minimise these occurrences. Some additional features include:
 
-```{r modelling_setup}
+- Dummy variables for **hour of day** (denoted `HOUR_1`, `HOUR_2`, ..., `HOUR_23`, with midnight being the baseline hour)
+- Dummy variables for **day of week** (denoted `weekday_2`, `weekday_3`, ..., `weekday_7`, with Monday being the baseline day of week)
+- Dummy variables for **month of year** (denoted `MONTH_2`, `MONTH_3`, ..., `MONTH_12`, with January being the baseline month)
+- **Lagged demand**, which includes demand from the previous five periods as well as the corresponding demand 24 hour ago. From the data exploration section, these periods demonstrated the highest correlation with present demand
+
+To account for the inclusion of lagged demand, the range of the dataset had to be adjusted slightly to remove any rows which had missing lagged demand due to constraints in the date range of the data. Thus, the first 24 hours of the dataset was removed for modelling. From an overall perspective, this should have minimal impact on the trained models when compared with the overall coverage of data available.
+
+Finally, the final dataset was split into three main sets: training, test, and holdout. This was done in order to fairly evaluate the performance of each model. 
+
+The training set would be used to determine the model based on the model type and selected hyperparameters if present. The test set would then be used to evaluate which set of hyperparameters for a particular model type has the best predictive performance. Finally, the holdout set is used to simulate a production environment where the model will be used to evaluate data after the model was created.
+
+It is important to note that unlike non time series related modelling which would involve random sampling at a particular ratio, the split of training, test and holdout sets here are determined by set time periods due to the inherent correlation between adjacent data points. 
+
+The table below summarises the split used in our modelling section. Due to the large time range present and granularity of our data, there were no concerns on insufficient coverage across any sets. However, it was important to include at least a full year's worth of data in each step to account for potential seasonality within a calendar year.  
 
 
 
+```{r modelling_sets, fig.cap = "Split between modelling sets"}
+knitr::kable(
+  data.frame(
+    `Model set` = c("Training", "Test", "Holdout")
+    , `Datetime start` = c("2010-01-02 00:00:00", "2018-08-01 00:00:00", "2020-08-01 00:00:00")
+    , `Datetime end` = c("2018-07-31 23:00:00", "2020-07-31 23:00:00", "2022-08-01 00:00:00")
+  )
+  , format = "latex"
+  , caption = "Split between modelling sets"
+)  %>%
+  kable_styling(latex_options = "HOLD_position")
 ```
 
-Step 2 - define lagged variables
-
-Step 3 - remove datapoints with missing lagged variables (total removal of one day of data)
+\newpage
 
 ## LASSO
 
-Explain scaling variables
+The first model that was trialed was the lasso model, which includes a shrinkage hyper-parameter `lambda` to determine the penalty of additional features to prevent over-fitting.
 
-Explain use of cross-validation of the combined training and test set
+$$
+y_i = \sum_{j} x_{ij} \beta_j + \lambda \sum_{j} |\beta_j|
+$$
 
-Justify use of nfolds = 5
+In order to ensure that the shrinkage feature works as intended, the input data was first scaled using the `scale` function. In this way, certain coefficients would not be penalised harder for having naturally larger numbers over others such that each variable would be equally considered for having their coefficients reduced. 
 
-Show lambda grid considered
+The code snippet below shows the list of `lambda` considered. The key design decision was to ensure that the `lambdas` considered spanned across several orders of magnitude. 
 
-Show best lambda selected (lambda vs. MSE chart)
+```{r lambda_grid, include = T}
+lambda_grid <- 10^seq(-2, 1, by = 0.1)
+print(lambda_grid)
+```
 
-Show shrinkage of coefficients
+The process of deciding which lambda to consider was achieved using cross-validation. Thus, both the training and test sets defined in the previous section was used here. As there was a large span of historical data for cross-validation, the number of folds chosen of five was relatively low. 
 
-Show performance on training set
+From the results of cross-validation in the chart below, it can be seen that there is a clear upward trend in MSE as lambda increases. This shows that penalising coefficients of variables has had an adverse effect on predictive performance. Thus, it made sense to choose the smallest lambda from the set of considered values for our final lasso regression model.   
 
-Show example chart of fitted vs. actuals
+```{r lambda, fig.cap = "Effect of lambda on MSE", out.height = "40%", out.width = "100%"}
+# lambda vs. MSE
+plot(lasso_model_list$cv)
+```
+
+\newpage
+
+When inspecting the coefficients, it is interesting to see some variables which are known determinants of demand to have shrunk to zero such as temperature. However, this can be explained by the fact that other variables captured such as lagged demand and hour of the day captures these more effectively, resulting in a superior predictive model. 
+
+```{r lasso_coeffs_1}
+lasso_coeff_table <- lasso_best_model$beta %>% 
+  as.matrix() %>% 
+  as.data.frame() %>% 
+  tibble::rownames_to_column(., "Variable") %>% 
+  transmute(
+    Variable = Variable
+    , Coefficient = fifelse(s0 == 0, ".", as.character(round(s0, 4)))
+  )
+
+lasso_coeff_table %>%
+  head(30) %>% 
+  knitr::kable(
+    .
+    , format = "latex"
+    , caption = "Resulting coefficients after shrinkage (part 1)"
+  )  %>%
+  kable_styling(latex_options = "HOLD_position")
+```
+
+\newpage
+
+```{r lasso_coeffs_2}
+lasso_coeff_table %>%
+  tail(28) %>% 
+  knitr::kable(
+    .
+    , format = "latex"
+    , caption = "Resulting coefficients after shrinkage (part 2)"
+  )  %>%
+  kable_styling(latex_options = "HOLD_position")
+```
+
+\newpage
+
+A quick inspection of the lambda pathway plot reaffirms this, with recent demand being the strongest indicators of future demand. In comparison, the lasso model found that most other coefficients were not as significant, and were therefore shrunk to zero or kept at a very low magnitude.
+
+```{r lasso_lambda_pathway, fig.cap = "Lambda pathway plot", out.height = "40%", out.width = "100%"}
+# lambda pathway plot
+plot(
+  lasso_model_list$cv$glmnet.fit
+  , "lambda"
+  , label = F
+)
+```
+\newpage
 
 ## Support vector regression (SVR)
 
-Explain scaling variables
+Support vector regressions uses support vectors (lines) to help define data points. Similar to lasso regression, the variables first had to be scaled to ensure direct comparisons when separating data points of different classes. 
 
-Justify features selected
+Another consideration when modelling using SVRs is constraints surrounding computational resources. In particular, kernel machines are sensitive to the amount of training data used. Using the full training dataset here resulted in unreasonably long computation times for hyperparamter tuning and large amounts of memory required to store the models. To reduce the impact on computational resources, the training data was cut to the start of **August 2014** onwards. 
 
-Explain tuning process
+In addition, the set of features considered in the model was more targeted in SVRs for the same reason. From guidance in the data exploration section, the features used in this model included temperature and the lagged demands established. 
 
-Show hyperparameters considered
+Both of these adjustments significantly improved runtime with minimal impacts on the predictive performance of the model.
 
-Show performance of each model and overall model chosen
+There were a couple hyperparameters that were considered for SVRs in this project.
+
+- Kernel: algorithm used for pattern analysis. A simple linear kernel was considered, as well as a more complex radial kernel to account for non-linear relationships
+
+- Epsilon: penalisations for errors. The larger the epsilon, the larger the penalisation from errors.
+
+The table below shows the full set of SVR models considered in this project. 
+
+```{r svr_model_list}
+svr_grid %>% 
+  transmute(
+    `Model ID` = id
+    , Epsilon = epsilon
+    , Kernel = kernel
+  ) %>% 
+  knitr::kable(
+    .
+    , format = "latex"
+    , caption = "List of SVR models"
+  )  %>%
+  kable_styling(latex_options = "HOLD_position")
+```
+
+The tuning process involves fitting a model with all the hyperparameter combinations shown above using training data and evaluating their performances using the test data. These metrics would be used as the final SVR model to consider.
+
+\newpage
+
+```{r svr_summary}
+svr_summary_table %>% 
+  knitr::kable(
+    .
+    , format = "latex"
+    , caption = "SVR model performances"
+  )  %>%
+  kable_styling(latex_options = "HOLD_position")
+```
+
+The table above shows that radial SVRs outperform linear SVRs, which can be explained by accounting for non-linear trends. Furthermore, models with lower epsilon values also attributed to better performance. Overall, the second SVR model (radial kernel with epsilon value of zero) performed best and was considered in the overall model selection process.
+
+The charts below compare the fitted versus actual values for the best and worst SVR models from the tuning process:
+
+```{r svr_best_jan, out.height = "40%", out.width = "100%"}
+# best model
+plot_predictions(
+  actual = dt_model[model_set == "test", TOTALDEMAND]
+  , pred = svr_models[[2]]$fitted_vals
+  , model = "SVR model 2"
+  , start_date = as.Date("2018-08-01")
+  , end_date = as.Date("2020-08-01")
+  , input_year = 2019
+  , input_month = 1
+) 
+```
+
+The chart above demonstrates that the best SVR model had strong forecasting performances throughout the month of Jan 2019.
+
+\newpage
+
+Meanwhile, the chart below, which used an SVR with a linear kernel and an epsilon value of one had difficulties estimating the peaks and troughs of each day, consistently underestimating the magnitudes in either directions.
+
+```{r svr_worst_jan, out.height = "40%", out.width = "100%"}
+# best model
+plot_predictions(
+  actual = dt_model[model_set == "test", TOTALDEMAND]
+  , pred = svr_models[[6]]$fitted_vals
+  , model = "SVR model 6"
+  , start_date = as.Date("2018-08-01")
+  , end_date = as.Date("2020-08-01")
+  , input_year = 2019
+  , input_month = 1
+) 
+```
+
+A similar trend can be seen in winter as well as seen in the two charts below for July 2019.
+
+```{r svr_best_jul, out.height = "40%", out.width = "100%"}
+# best model
+plot_predictions(
+  actual = dt_model[model_set == "test", TOTALDEMAND]
+  , pred = svr_models[[2]]$fitted_vals
+  , model = "SVR model 2"
+  , start_date = as.Date("2018-08-01")
+  , end_date = as.Date("2020-08-01")
+  , input_year = 2019
+  , input_month = 7
+) 
+```
+
+\newpage
+
+```{r svr_worst_jul, out.height = "40%", out.width = "100%"}
+# best model
+plot_predictions(
+  actual = dt_model[model_set == "test", TOTALDEMAND]
+  , pred = svr_models[[6]]$fitted_vals
+  , model = "SVR model 6"
+  , start_date = as.Date("2018-08-01")
+  , end_date = as.Date("2020-08-01")
+  , input_year = 2019
+  , input_month = 7
+) 
+```
+
+\newpage
 
 ## Random forest
+
+Random forest regression is a machine learning algorithm that consists of many decision trees. 
+
+Similar to SVR, this section aims to find the best hyperparameters as well as perform some light feature selection. The hyperparamters considered for random forest regression include
+
+- number of trees (100, 200, 300, 400, and 500 trees considered)
+- mtries, which specifies the number of columns to randomly select at each level (3, 4, or 5)
+- sample rate (ranged from 0.5 to 0.8)
+- max depth of tree (ranged from 5 to 10)
+
+The tuning process was performed using the `h2o` package in R. Using this package, a search algorithm can be specified to control the runtime of the tuning process. The search algorithm implemented here included:
+
+- using a random discrete strategy when selecting hyperparameters
+- set a max runtime of 600 seconds
+- stop the process if the MSE has not improved after 5 models
+
+The first model was tuned using all features available in the dataset. Afterwards, a second model was tuned by selecting variables which scored 0.01 or greater in the variance importance metric, which is a measure of the significance of each considered feature. By considering a smaller subset of features, the model may reduce over-fitting, leading to better predictive performance. The chart below shows the variance importance of the first model.
+
+```{r rf_varimp_1, fig.cap = "Variance Importance Plot considering all features", out.height = "40%", out.width = "100%"}
+h2o.varimp_plot(rf_model_1$best_model, num_of_features = 30)
+```
+The most important measure according to the model was the demand 24 hours prior, which makes intuitive sense as they are highly correlated. Furthermore, temperature and whether it was a cold day also had high importance according to the model.
+
+\newpage
+
+The second model had a reduction in number of features from 58 to 23 after considering their variance importance measures. The variance importance plot can be seen below.
+
+```{r rf_varimp_2, fig.cap = "Variance Importance Plot after feature selection", out.height = "40%", out.width = "100%"}
+h2o.varimp_plot(rf_model_2$best_model, num_of_features = 30)
+```
+
+After performing feature selection, the top variables are recent demand values. This is consistent with what was found in the correlation analysis in the data exploration section. 
+
+Evaluating the performances of the model with all features compared to the model after feature selection reveals that removing some features did improve the overall performance of the model. However in both cases, there may be some overfitting to the training data as the test set had a relatively significant reduction in performance compared to the training set.  
+
+```{r rf_performance}
+rbind(
+  rf_model_1$metrics
+  , rf_model_2$metrics
+) %>% 
+  mutate(
+    model_name = case_when(model_name == "training_1" ~ "Training data (all features)"
+                           , model_name == "test_1" ~ "Test data (all features)"
+                           , model_name == "training_2" ~ "Training data (feature selection)"
+                           , model_name == "test_2" ~ "Test data (feature selection)")
+  ) %>% 
+  rename(
+    `Model name` = model_name
+  ) %>% 
+  knitr::kable(
+    .
+    , format = "latex"
+    , caption = "Random forest regression model performances"
+  )  %>%
+  kable_styling(latex_options = "HOLD_position")
+```
+
+\newpage
+
+The plots below compare the actual versus fitted values in the test data. Using January 2019 data, the first random forest model had a particularly hard time forecasting the peaks of each day, consistently underestimating the true value. This issue is still present in days with high peak demands in the second random forest model, albeit to a lesser extent.  
+
+```{r rf_plot_1, out.height = "40%", out.width = "100%"}
+plot_predictions(
+  actual = actuals_demand_test
+  , pred = rf_model_1$pred$test
+  , model = "random forest (all features)"
+  , start_date = as.Date("2018-08-01")
+  , end_date   = as.Date("2020-08-01")
+  , input_month = 1
+  , input_year = 2019
+)
+```
+
+```{r rf_plot_2, out.height = "40%", out.width = "100%"}
+plot_predictions(
+  actual = actuals_demand_test
+  , pred = rf_model_2$pred$test
+  , model = "random forest (feature selection)"
+  , start_date = as.Date("2018-08-01")
+  , end_date   = as.Date("2020-08-01")
+  , input_month = 1
+  , input_year = 2019
+)
+```
+
+\newpage
+
+Again, a similar trend can be found when examining July 2019 fitted versus actual demand, with the feature selection model outperforming the model using all features. 
+
+```{r rf_plot_3, out.height = "40%", out.width = "100%"}
+plot_predictions(
+  actual = actuals_demand_test
+  , pred = rf_model_1$pred$test
+  , model = "random forest (all features)"
+  , start_date = as.Date("2018-08-01")
+  , end_date   = as.Date("2020-08-01")
+  , input_month = 7
+  , input_year = 2019
+)
+
+```
+
+```{r rf_plot_4, out.height = "40%", out.width = "100%"}
+plot_predictions(
+  actual = actuals_demand_test
+  , pred = rf_model_2$pred$test
+  , model = "random forest (feature selection)"
+  , start_date = as.Date("2018-08-01")
+  , end_date   = as.Date("2020-08-01")
+  , input_month = 7
+  , input_year = 2019
+)
+```
+
+\newpage
 
 ## Final model selection
 
 # Discussion
 
-Put the results you got in the previous chapter in perspective with respect to the problem studied.
+Potential improvements to consider:
+
+- More complex models (outside the scope of the team's experience): recurrent neural networks, anything else from literature review
+
+- Greater computational resources: some tuning decisions in SVM and random forest were constrained by the 
+runtime and memory size
+
+- Multivariate analysis: being able to forecast multiple hours ahead at a given time  
+
+- Access to more data: hourly weather conditions like rainfall, solar exposure, wind speed, humidity
 
 # Conclusion
 
