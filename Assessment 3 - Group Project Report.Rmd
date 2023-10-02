@@ -57,31 +57,119 @@ source("Code/03 Modelling.R") # modelling
 
 <Insert literature review here>
 
+\newpage
+
 # Material and Methods
 
 ## Software
 
-R and Python of course are great software for Data Science. Sometimes, you might want to use `bash` utilities such as `awk` or `sed`.
+Our analysis and modelling were conducted using the R programming language, known for its proficiency in statistical analysis and data manipulation. We leveraged several essential R packages to streamline data management and analysis, empowering us to build robust predictive models. Some of the key R packages we used include: 
 
-Of course, to ensure reproducibility, you should use something like `Git` and RMarkdown (or a Jupyter Notebook). Do **not** use Word!
+- **tidyverse:** This comprehensive package suite equipped us with a powerful set of tools for data manipulation, visualization, and analysis. Its flexibility and integration with other packages were essential for our data preparation and exploration. 
 
-## Description of the Data
+- **lubridate:** Essential for working with date and time data, a crucial aspect of time series analysis. This package allowed us to handle temporal information efficiently and accurately. 
 
-How are the data stored? What are the sizes of the data files? How many files? etc.
+- **data.table:** We harnessed the efficiency of the data.table package for data manipulation tasks, particularly when dealing with large datasets. Its speed and concise syntax were instrumental in aggregating and selecting columns. 
+
+- **crayon:** Used for adding colourful text to our visualizations, enhancing their interpretability, and making our reports more engaging. 
+
+- **zoo:** As a pivotal package for handling time series data, zoo played a crucial role in our analysis. It provided the tools needed to process, manipulate, and visualize time-based data structures. 
+
+- **tsibble:** Facilitating the management of time series data, tsibble served as the foundation for our time-based operations, ensuring consistency and accuracy in our analyses. 
+
+- **gridExtra, grid, patchwork:** These packages enabled us to create complex grid layouts for our visualizations, enhancing the presentation of our findings and insights. 
+
+- **GGally:** This package expanded our ggplot2-based visualizations by offering additional plot types and features, enriching our data exploration. 
+
+## Data Acquisition
+
+Our analysis relied on hourly records of critical variables, including electricity demand, temperature, rainfall, solar exposure, and forecasted demand. We efficiently imported these data sources into R using the `fread` function from the data.table package, ensuring a rapid and seamless data import process. 
 
 ## Pre-processing Steps
 
-What did you have to do to transform the data so that they become useable?
+- **Handling Duplicates:** We prioritized data integrity by identifying and meticulously removing duplicate records from the total electricity demand dataset. 
 
-## Data Cleaning
+- **Date Matrix Creation:** To standardize time intervals in the total demand dataset, we crafted a date matrix with 5-minute intervals. Missing values within this dataset were expertly interpolated using the 'na.approx' function. 
 
-How did you deal with missing data? etc. 
+- **Temperature Data:** Suspicious temperature values below -23°C were logically removed from the dataset, as they were considered unrealistic for New South Wales. The temperature dataset was further polished by interpolation. 
 
-## Assumptions
+- **Forecast Data:** We efficiently extracted initial and final forecast data from the forecast demand dataset. Time interval inconsistencies were addressed, and missing values were filled using a meticulous down-fill approach. 
 
-What assumptions are you making on the data?
+- **Aggregation:** In alignment with our modelling approach, we conducted hourly aggregation on the prepared datasets to harmonize temporal resolutions. 
+
+## Feature Engineering
+
+- **Date-related Features:** Our analysis benefitted from a range of date-related features, including season, season indicators (summer and winter), day/night indicators, and days of the week. We also classified days based on business days (weekdays) and weekends, enriching our dataset with temporal insights. 
+
+- **Temperature-related Features:** Various temperature-related features were artfully engineered to capture temperature extremes and categorize them into hot/cold day/night and extreme categories, providing valuable context for our modelling. 
+
+## Data Integration
+
+- **Rainfall and Solar Exposure:** To enhance our dataset's comprehensiveness, we seamlessly integrated rainfall and solar exposure data. We accomplished this by joining the datasets using a date-based key and expertly interpolating any missing values. 
+
+- **Public Holidays:** The inclusion of public holiday data for New South Wales enriched our dataset with additional contextual factors, offering valuable insights for our analysis. 
 
 ## Modelling Methods
+
+We implemented three different predictive models to forecast electricity demand: 
+
+**Lasso Regression:** 
+
+- To address overfitting and improve model interpretability, we applied Lasso regression with cross-validation to select the best regularization parameter (lambda). 
+
+- The selected model was trained on the training data and evaluated using Mean Absolute Error (MAE) and Mean Squared Error (MSE) on the test data. 
+
+**Support Vector Regression (SVR):** 
+
+- We explored SVR models with various hyperparameters (epsilon and kernel) to capture non-linear relationships in the data. 
+
+- Multiple SVR models were trained and evaluated on the test data, with performance metrics reported. 
+
+**Random Forest:** 
+
+- Hyperparameter tuning was performed for Random Forest models, including parameters like the number of trees, mtrices, and sample rate. 
+
+- We trained two Random Forest models, one with all features and one with a reduced feature set based on variance importance. 
+
+- Model performance was assessed using test data, and predictions were compared with actual demand values. 
+
+## Model Selection and Evaluation
+
+We compared the performance of our predictive models on a holdout dataset: 
+
+- **AEMO Benchmark:** We benchmarked our models against the Australian Energy Market Operator (AEMO) forecast to evaluate their performance in a real-world context. 
+
+- **Lasso Model:** We evaluated the performance of our Lasso regression model, comparing its predictions with actual demand values using MAE and MSE. 
+
+- **Support Vector Regression:** We assessed the SVR models' performance, considering various combinations of hyperparameters, and compared them to actual demand. 
+
+- **Random Forest:** The Random Forest models' performance was evaluated using test data, and the predictions were compared with actual demand values. 
+
+## Data Exploration
+
+**Model Evaluation:** 
+
+Our evaluation process was meticulous, aiming to gauge the predictive accuracy of our models. We employed well-established error metrics, including Mean Absolute Error (MAE) and Mean Squared Error (MSE), to assess the performance of our predictive models rigorously. These metrics served as valuable guides in the selection of the most suitable model. 
+
+**Key EDA Visualizations:** 
+
+In addition to model evaluation, we conducted a comprehensive Exploratory Data Analysis (EDA) that unveiled essential insights into our dataset. Some of the pivotal plots used in our EDA included: 
+
+- **Boxplot of Hourly Total Demand by Month:** This visualization shed light on the monthly variations in electricity demand, offering valuable insights. 
+
+- **Line Chart of Forecast vs. Actual (2010 & 2021):** A comparison of forecasted demand against actual demand for the years 2010 and 2021, aiding in the assessment of predictive accuracy. 
+
+- **Line Charts of Total Demand vs. Temperature:** These visualizations illustrated the relationship between electricity demand and temperature fluctuations, uncovering crucial patterns. 
+
+- **Total Demand vs. Temperature Pair plot:** An analytical tool that revealed intricate correlations between total demand and temperature. 
+
+- **Multivariate pair plot:** A multidimensional exploration of data relationships, helping us identify complex dependencies. 
+
+- **Lagged Correlations:** Insights into how past values of variables correlated with future electricity demand, providing a deeper understanding of temporal dependencies. 
+
+These visualizations played a pivotal role in our analysis by helping us uncover insights, identify outliers, and validate the effectiveness of our modelling approach. In the subsequent 'EDA Section,' we will delve deeper into the insights gained from our exploratory data analysis, which involved the creation of various plots and visualizations to uncover patterns and relationships within the data. 
+
+\newpage
 
 # Exploratory Data Analysis
 
@@ -109,8 +197,6 @@ The training set would be used to determine the model based on the model type an
 It is important to note that unlike non time series related modelling which would involve random sampling at a particular ratio, the split of training, test and holdout sets here are determined by set time periods due to the inherent correlation between adjacent data points. 
 
 The table below summarises the split used in our modelling section. Due to the large time range present and granularity of our data, there were no concerns on insufficient coverage across any sets. However, it was important to include at least a full year's worth of data in each step to account for potential seasonality within a calendar year.  
-
-
 
 ```{r modelling_sets, fig.cap = "Split between modelling sets"}
 knitr::kable(
@@ -148,7 +234,7 @@ The process of deciding which lambda to consider was achieved using cross-valida
 
 From the results of cross-validation in the chart below, it can be seen that there is a clear upward trend in MSE as lambda increases. This shows that penalising coefficients of variables has had an adverse effect on predictive performance. Thus, it made sense to choose the smallest lambda from the set of considered values for our final lasso regression model.   
 
-```{r lambda, fig.cap = "Effect of lambda on MSE", out.height = "40%", out.width = "100%"}
+```{r lambda, fig.cap = "Effect of lambda on MSE", out.height = "40%", out.width = "120%"}
 # lambda vs. MSE
 plot(lasso_model_list$cv)
 ```
@@ -168,7 +254,7 @@ lasso_coeff_table <- lasso_best_model$beta %>%
   )
 
 lasso_coeff_table %>%
-  head(30) %>% 
+  head(40) %>% 
   knitr::kable(
     .
     , format = "latex"
@@ -181,7 +267,7 @@ lasso_coeff_table %>%
 
 ```{r lasso_coeffs_2}
 lasso_coeff_table %>%
-  tail(28) %>% 
+  tail(18) %>% 
   knitr::kable(
     .
     , format = "latex"
@@ -190,11 +276,9 @@ lasso_coeff_table %>%
   kable_styling(latex_options = "HOLD_position")
 ```
 
-\newpage
-
 A quick inspection of the lambda pathway plot reaffirms this, with recent demand being the strongest indicators of future demand. In comparison, the lasso model found that most other coefficients were not as significant, and were therefore shrunk to zero or kept at a very low magnitude.
 
-```{r lasso_lambda_pathway, fig.cap = "Lambda pathway plot", out.height = "40%", out.width = "100%"}
+```{r lasso_lambda_pathway, fig.cap = "Lambda pathway plot", out.height = "30%", out.width = "120%"}
 # lambda pathway plot
 plot(
   lasso_model_list$cv$glmnet.fit
@@ -202,6 +286,7 @@ plot(
   , label = F
 )
 ```
+
 \newpage
 
 ## Support vector regression (SVR)
@@ -239,8 +324,6 @@ svr_grid %>%
 
 The tuning process involves fitting a model with all the hyperparameter combinations shown above using training data and evaluating their performances using the test data. These metrics would be used as the final SVR model to consider.
 
-\newpage
-
 ```{r svr_summary}
 svr_summary_table %>% 
   knitr::kable(
@@ -251,11 +334,13 @@ svr_summary_table %>%
   kable_styling(latex_options = "HOLD_position")
 ```
 
+\newpage
+
 The table above shows that radial SVRs outperform linear SVRs, which can be explained by accounting for non-linear trends. Furthermore, models with lower epsilon values also attributed to better performance. Overall, the second SVR model (radial kernel with epsilon value of zero) performed best and was considered in the overall model selection process.
 
 The charts below compare the fitted versus actual values for the best and worst SVR models from the tuning process:
 
-```{r svr_best_jan, out.height = "40%", out.width = "100%"}
+```{r svr_best_jan, out.height = "40%", out.width = "120%"}
 # best model
 plot_predictions(
   actual = dt_model[model_set == "test", TOTALDEMAND]
@@ -270,11 +355,9 @@ plot_predictions(
 
 The chart above demonstrates that the best SVR model had strong forecasting performances throughout the month of Jan 2019.
 
-\newpage
-
 Meanwhile, the chart below, which used an SVR with a linear kernel and an epsilon value of one had difficulties estimating the peaks and troughs of each day, consistently underestimating the magnitudes in either directions.
 
-```{r svr_worst_jan, out.height = "40%", out.width = "100%"}
+```{r svr_worst_jan, out.height = "40%", out.width = "120%"}
 # best model
 plot_predictions(
   actual = dt_model[model_set == "test", TOTALDEMAND]
@@ -287,9 +370,11 @@ plot_predictions(
 ) 
 ```
 
+\newpage
+
 A similar trend can be seen in winter as well as seen in the two charts below for July 2019.
 
-```{r svr_best_jul, out.height = "40%", out.width = "100%"}
+```{r svr_best_jul, out.height = "40%", out.width = "120%"}
 # best model
 plot_predictions(
   actual = dt_model[model_set == "test", TOTALDEMAND]
@@ -302,9 +387,7 @@ plot_predictions(
 ) 
 ```
 
-\newpage
-
-```{r svr_worst_jul, out.height = "40%", out.width = "100%"}
+```{r svr_worst_jul, out.height = "40%", out.width = "120%"}
 # best model
 plot_predictions(
   actual = dt_model[model_set == "test", TOTALDEMAND]
@@ -338,7 +421,7 @@ The tuning process was performed using the `h2o` package in R. Using this packag
 
 The first model was tuned using all features available in the dataset. Afterwards, a second model was tuned by selecting variables which scored 0.01 or greater in the variance importance metric, which is a measure of the significance of each considered feature. By considering a smaller subset of features, the model may reduce over-fitting, leading to better predictive performance. The chart below shows the variance importance of the first model.
 
-```{r rf_varimp_1, fig.cap = "Variance Importance Plot considering all features", out.height = "40%", out.width = "100%"}
+```{r rf_varimp_1, fig.cap = "Variance Importance Plot considering all features", out.height = "40%", out.width = "120%"}
 h2o.varimp_plot(rf_model_1$best_model, num_of_features = 30)
 ```
 The most important measure according to the model was the demand 24 hours prior, which makes intuitive sense as they are highly correlated. Furthermore, temperature and whether it was a cold day also had high importance according to the model.
@@ -347,7 +430,7 @@ The most important measure according to the model was the demand 24 hours prior,
 
 The second model had a reduction in number of features from 58 to 23 after considering their variance importance measures. The variance importance plot can be seen below.
 
-```{r rf_varimp_2, fig.cap = "Variance Importance Plot after feature selection", out.height = "40%", out.width = "100%"}
+```{r rf_varimp_2, fig.cap = "Variance Importance Plot after feature selection", out.height = "40%", out.width = "120%"}
 h2o.varimp_plot(rf_model_2$best_model, num_of_features = 30)
 ```
 
@@ -381,7 +464,7 @@ rbind(
 
 The plots below compare the actual versus fitted values in the test data. Using January 2019 data, the first random forest model had a particularly hard time forecasting the peaks of each day, consistently underestimating the true value. This issue is still present in days with high peak demands in the second random forest model, albeit to a lesser extent.  
 
-```{r rf_plot_1, out.height = "40%", out.width = "100%"}
+```{r rf_plot_1, out.height = "40%", out.width = "120%"}
 plot_predictions(
   actual = actuals_demand_test
   , pred = rf_model_1$pred$test
@@ -393,7 +476,7 @@ plot_predictions(
 )
 ```
 
-```{r rf_plot_2, out.height = "40%", out.width = "100%"}
+```{r rf_plot_2, out.height = "40%", out.width = "120%"}
 plot_predictions(
   actual = actuals_demand_test
   , pred = rf_model_2$pred$test
@@ -409,7 +492,7 @@ plot_predictions(
 
 Again, a similar trend can be found when examining July 2019 fitted versus actual demand, with the feature selection model outperforming the model using all features. 
 
-```{r rf_plot_3, out.height = "40%", out.width = "100%"}
+```{r rf_plot_3, out.height = "40%", out.width = "120%"}
 plot_predictions(
   actual = actuals_demand_test
   , pred = rf_model_1$pred$test
@@ -422,7 +505,7 @@ plot_predictions(
 
 ```
 
-```{r rf_plot_4, out.height = "40%", out.width = "100%"}
+```{r rf_plot_4, out.height = "40%", out.width = "120%"}
 plot_predictions(
   actual = actuals_demand_test
   , pred = rf_model_2$pred$test
@@ -464,7 +547,7 @@ Interestingly, the random forest model continued to deteriorate in performance a
 
 Taking a closer look at one of the months in the holdout set, it can be observed that most of the forecasting error in the aemo model occurs at the peaks and troughs of demand. 
 
-```{r aemo_final_plot, out.height = "40%", out.width = "100%"}
+```{r aemo_final_plot, out.height = "40%", out.width = "120%"}
 plot_predictions(
   actual = actual_holdout_demand
   , pred = aemo_holdout_demand
@@ -476,7 +559,7 @@ plot_predictions(
 
 The lasso model fitted in this project shows a similar performance to the aemo model, with slightly more accurate predictions overall. 
 
-```{r lasso_final_plot, out.height = "40%", out.width = "100%"}
+```{r lasso_final_plot, out.height = "40%", out.width = "120%"}
 plot_predictions(
   actual = actual_holdout_demand
   , pred = lasso_pred
@@ -488,7 +571,7 @@ plot_predictions(
 
 As reaffirmed by the performance metrics summary, the SVR also looks the most accurate when comparing with actuals in November 2021 as well. 
 
-```{r svr_final_plot, out.height = "40%", out.width = "100%"}
+```{r svr_final_plot, out.height = "40%", out.width = "120%"}
 plot_predictions(
   actual = actual_holdout_demand
   , pred = svr_pred
@@ -499,7 +582,7 @@ plot_predictions(
 ```
 Finally, the random forest model seemed to have the most trouble forecasting the troughs in November 2021, over-estimating energy demands in these periods overall. 
 
-```{r rf_final_plot, out.height = "40%", out.width = "100%"}
+```{r rf_final_plot, out.height = "40%", out.width = "120%"}
 plot_predictions(
   actual = actual_holdout_demand
   , pred = rf_pred
