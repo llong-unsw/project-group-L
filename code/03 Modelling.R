@@ -10,7 +10,7 @@
 # set up ------------------------------------------------------------------
 
 # flag to run dependencies (only first time)
-run_dependencies = T
+run_dependencies = F
 
 # run required scripts
 if (run_dependencies) {
@@ -229,23 +229,8 @@ if (update_models) {
 # read lasso model
 lasso_model_list <- readRDS("models/lasso.RDS")
 
-# lambda vs. MSE
-plot(lasso_model_list$cv)
-
-# inspect min lambda
-print(lasso_model_list$min_lambda)
-
-# inspect coefficients
+# save best lasso model
 lasso_best_model <- lasso_model_list$best_model
-print(lasso_best_model$beta)
-
-# lambda pathway plot
-plot(
-  lasso_model_list$cv$glmnet.fit
-  , "lambda"
-  , label = F
-)
-
 
 # support vector regression -----------------------------------------------
 
@@ -291,7 +276,7 @@ svr_models <- lapply(1:svr_grid[, .N], function(x) {
 })
 
 # summary table comparing performances with different tuning parameters
-rbindlist(
+svr_summary_table <- rbindlist(
   list(
     svr_models[[1]]$performance
     , svr_models[[2]]$performance
@@ -341,7 +326,7 @@ actuals_demand_test <- rf_test[, .SD, .SDcols = y_cols]
 # set hyperparameter grid
 rf_hyper_grid <- list(
   ntrees        = seq(100, 500, by = 100)
-  , mtries      = 3:5
+  , mtries      = seq(5, 35, by = 5)
   , sample_rate = c(0.5, 0.8, by = 0.1)
   , max_depth   = 5:10
 )
@@ -402,47 +387,17 @@ if (update_models) {
   
   # save model
   saveRDS(rf_list, "models/random_forest.RDS")
-  
+  h2o.saveModel(object = rf_model_1$best_model, path = "models", force = TRUE)
+  h2o.saveModel(object = rf_model_2$best_model, path = "models", force = TRUE)
 }
 
 # read random forest models
 rf_list <- readRDS("models/random_forest.RDS")
+rf_list$model_1$best_model <- h2o.loadModel("models/rf_grid1_model_132")
+rf_list$model_2$best_model <- h2o.loadModel("models/rf_grid2_model_23")
+
 rf_model_1 <- rf_list$model_1
 rf_model_2 <- rf_list$model_2
-
-# inspect variance importance plots of both models
-par(mfrow = c(1, 2))
-h2o.varimp_plot(rf_model_1$best_model, num_of_features = 30)
-h2o.varimp_plot(rf_model_2$best_model, num_of_features = 30)
-
-# compare performances
-rbind(
-  rf_model_1$metrics
-  , rf_model_2$metrics
-)
-
-# plot fitted vs. actuals
-par(mfrow = c(2, 1))
-
-plot_predictions(
-  actual = actuals_demand_test
-  , pred = rf_model_1$pred$test
-  , model = "random forest 1"
-  , start_date = as.Date("2018-01-01")
-  , end_date   = as.Date("2020-01-01")
-  , input_month = 1
-  , input_year = 2019
-)
-
-plot_predictions(
-  actual = actuals_demand_test
-  , pred = rf_model_2$pred$test
-  , model = "random forest 2"
-  , start_date = as.Date("2018-01-01")
-  , end_date   = as.Date("2020-01-01")
-  , input_month = 1
-  , input_year = 2019
-)
 
 # save final model
 rf_best_model <- rf_model_2$best_model
@@ -525,7 +480,7 @@ dt_svr_summary <- summarise_model_performance(
 
 # random forest
 rf_holdout <- dt_model[model_set == "holdout", .SD, .SDcols = model_cols] %>% as.h2o()
-rf_pred <- h2o.predict(rf_best_model, newdata = rf_holdout) 
+rf_pred <- h2o.predict(rf_model_2$best_model, newdata = rf_holdout) 
 
 # performance metrics
 dt_rf_summary <- summarise_model_performance(
@@ -534,18 +489,7 @@ dt_rf_summary <- summarise_model_performance(
   , model_name = "random forest"
 )
 
-plot_predictions(
-  actual = actual_holdout_demand
-  , pred = rf_pred
-  , model = "random forest"
-  , input_year = 2020
-  , input_month = 11
-) 
 
 
-rbind(
-  dt_aemo_summary
-  , dt_lasso_summary
-  , dt_svr_summary
-  , dt_rf_summary
-)
+
+
