@@ -25,6 +25,7 @@ package_list <- c(
   , "grid"
   , "patchwork"
   , "GGally"
+  , "ggcorrplot"
 )
 
 # list of packages not installed
@@ -431,56 +432,478 @@ print(MAE_MSE)
 ##Summary of measures from key tables
 summary(data)
 
-###########################################
-##Boxplot of Hourly total demand by month##
-###########################################
 
-#Boxplot by 
-boxplot_demand_month_hist <- ggplot(data) + geom_boxplot(aes(x = as.factor(MONTH), y = TOTALDEMAND, group = as.factor(MONTH)))+
-  labs(title = "2010 Jan ~ 2022 Aug Hourly Total Demand by Month", 
-       x = "Month", 
-       y = "Total Demand") +
-  theme(legend.key.size = unit(1, 'cm'), 
-        legend.key.height = unit(0.5, 'cm'), 
-        legend.key.width = unit(0.5, 'cm'), 
-        legend.title = element_text(size=7), 
-        legend.text = element_text(size=7),
-        axis.title=element_text(size=8,face="bold")) +
-  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
+################################
+##Create data frame for charts##
+################################
+#Create base data excl 2022-08 due to incomplete period (only has the first 5 minutes)
+data_Excl_202208 <- data[data$DATEHOUR < '2022-08-01',]
 
-#Can identify June/July having higher energy consumption compared to other months
-#Comparing 2010 and 2021 (2022 data isn't complete)
-boxplot_demand_month_2010 <- ggplot(data[data$YEAR==2010,]) + 
-  geom_boxplot(aes(x = as.factor(MONTH), y = TOTALDEMAND, group = as.factor(MONTH)))+
-  labs(title = "2010 Hourly Total Demand by Month", 
-       x = "Month", 
-       y = "Total Demand") +
-  theme(legend.key.size = unit(1, 'cm'), 
-        legend.key.height = unit(0.5, 'cm'), 
-        legend.key.width = unit(0.5, 'cm'), 
-        legend.title = element_text(size=7), 
-        legend.text = element_text(size=7),
-        axis.title=element_text(size=8,face="bold")) +
-  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
+################################################
+##Figure 1 Line chart by date-hour, historical##
+################################################
 
-boxplot_demand_month_2021 <- ggplot(data[data$YEAR==2021,]) + 
-  geom_boxplot(aes(x = as.factor(MONTH), y = TOTALDEMAND, group = as.factor(MONTH)))+
-  labs(title = "2021 Monthly Total Demand", 
-       x = "Month", 
-       y = "Total Demand") +
-  theme(legend.key.size = unit(1, 'cm'), 
-        legend.key.height = unit(0.5, 'cm'), 
-        legend.key.width = unit(0.5, 'cm'), 
-        legend.title = element_text(size=7), 
-        legend.text = element_text(size=7),
-        axis.title=element_text(size=8,face="bold")) +
-  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
-#Again confirmed that July/Aug having the highest demand
+##Create base linechart function 
+line_base <- function(y,x,titlelab,xlab,ylab) { 
+  ggplot(data=NULL, aes(x=x)) + 
+    geom_line(linewidth=1.3, aes(y = y), color = "steelblue") +
+    labs(title = titlelab, 
+         x = xlab, 
+         y = ylab) +
+    theme(legend.key.size = unit(1, 'cm'), 
+          legend.key.height = unit(0.5, 'cm'), 
+          legend.key.width = unit(0.5, 'cm'), 
+          legend.title = element_text(size=7), 
+          legend.text = element_text(size=7),
+          axis.title=element_text(size=8,face="bold"))
+}
 
-grid.arrange(boxplot_demand_month_hist,
-             boxplot_demand_month_2010,
-             boxplot_demand_month_2021,
-             ncol=1)
+#add to make y axis k
+unit_k <- function(i){
+  i+scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
+}
+
+
+
+#Create chart with date versus various variables
+hourly_total_energy_demand_hist <- unit_k(line_base(data_Excl_202208$TOTALDEMAND,
+                                                    data_Excl_202208$DATE,
+                                                    "Total Energy Demand (MW) per Hour",
+                                                    "Year-Month-Day Hour",
+                                                    "Total Demand"))
+
+hourly_average_temperature_hist <- line_base(data_Excl_202208$TEMPERATURE,
+                                             data_Excl_202208$DATE,
+                                             "Temperature (Celsius) per Hour",
+                                             "Year-Month-Day Hour",
+                                             "Temperature (Celsius)") 
+
+
+daily_average_rainfall_hist <- line_base(data_Excl_202208$DAILY_RAINFALL_AMT_MM,
+                                         data_Excl_202208$DATE,
+                                         "Rainfall (mm) per Day",
+                                         "Year-Month-Day Hour",
+                                         "Rainfall (mm)") 
+
+daily_average_solar_hist <- line_base(data_Excl_202208$DAILY_GLBL_SOLAR_EXPOSR,
+                                      data_Excl_202208$DATE,
+                                      "Solar Exposure (kj/m**2) per Day",
+                                      "Year-Month-Day Hour",
+                                      "Solar Exposure (kj/m**2)") 
+
+#Display the charts for fig 1
+grid.arrange(hourly_total_energy_demand_hist,
+             hourly_average_temperature_hist,
+             daily_average_rainfall_hist,
+             daily_average_solar_hist,
+             ncol=1,
+             top = textGrob("Figure 1. yyyy-mm-dd hh of 2010-01 ~ 2022-07",
+                            gp=gpar(fontsize=16,font=1))
+)
+
+#################################################
+##Figure 2 Line chart by year-month, historical##
+#################################################
+
+#Create dataset with monthly aggregate, excl final month due to incomplete month
+data_mthly_agg <- data %>%
+  group_by(YEARMONTH) %>%
+  summarise(TOTALDEMAND = sum(TOTALDEMAND),
+            FINAL_FORECAST = sum(FINAL_FORECAST),
+            TEMPERATURE = mean(TEMPERATURE),
+            daily_solar = mean(DAILY_GLBL_SOLAR_EXPOSR),
+            daily_rainfall = sum(DAILY_RAINFALL_AMT_MM)) %>% 
+  filter(YEARMONTH != '2022-08-01')
+
+#historical monthly aggregate
+mthly_total_energy <- unit_k(line_base(data_mthly_agg$TOTALDEMAND,
+                                       data_mthly_agg$YEARMONTH,
+                                       "Monthly Total Energy Demand (MW)",
+                                       "Year - Month",
+                                       "Total Demand"))
+
+
+mthly_average_temperature_hist <- line_base(data_mthly_agg$TEMPERATURE,
+                                            data_mthly_agg$YEARMONTH,
+                                            "Monthly Average Temperature (Celsius)",
+                                            "Year - Month",
+                                            "Temperature (Celsius)") 
+
+
+mthly_total_rainfall_hist <- unit_k(line_base(data_mthly_agg$daily_rainfall,
+                                              data_mthly_agg$YEARMONTH,
+                                              "Monthly Total Rainfall (mm)",
+                                              "Year - Month",
+                                              "Rainfall (mm)")) 
+
+mthly_average_solar_hist <- line_base(data_mthly_agg$daily_solar,
+                                      data_mthly_agg$YEARMONTH,
+                                      "Monthly Average Solar Exposure (kj/m**2)",
+                                      "Year - Month",
+                                      "Solar Exposure (kj/m**2)") 
+
+#Display the charts for fig 2
+grid.arrange(mthly_total_energy,
+             mthly_average_temperature_hist,
+             mthly_total_rainfall_hist,
+             mthly_average_solar_hist,
+             ncol=1,
+             top = textGrob("Figure 2. 2010-01 ~ 2022-07",
+                            gp=gpar(fontsize=16,font=1))
+)
+
+################################################################
+##Figure 3 Line chart of variable versus month for 2010 & 2021##
+################################################################
+
+#monthly total demand 2010 and 2021
+mthly_total_energy_2010 <- unit_k(line_base(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,]$TOTALDEMAND,
+                                            data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,]$YEARMONTH,
+                                            "2010 Monthly Total Energy Demand (MW)",
+                                            "Year - Month",
+                                            "Total Demand"))
+mthly_total_energy_2021 <- unit_k(line_base(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,]$TOTALDEMAND,
+                                            data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,]$YEARMONTH,
+                                            "2021 Monthly Total Energy Demand (MW)",
+                                            "Year - Month",
+                                            "Total Demand"))
+
+#monthly average temperature 2010 and 2021
+mthly_average_temperature_hist_2010 <- line_base(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,]$TEMPERATURE,
+                                                 data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,]$YEARMONTH,
+                                                 "2010 Monthly Average Temperature (Celsius)",
+                                                 "Year - Month",
+                                                 "Temperature (Celsius)") 
+mthly_average_temperature_hist_2021 <- line_base(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,]$TEMPERATURE,
+                                                 data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,]$YEARMONTH,
+                                                 "2021 Monthly Average Temperature (Celsius)",
+                                                 "Year - Month",
+                                                 "Temperature (Celsius)") 
+#monthly total rainfall 2010 and 2021
+mthly_total_rainfall_hist_2010 <- unit_k(line_base(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,]$daily_rainfall,
+                                                   data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,]$YEARMONTH,
+                                                   "2010 Monthly Total Rainfall (mm)",
+                                                   "Year - Month",
+                                                   "Rainfall (mm)")) 
+mthly_total_rainfall_hist_2021 <- unit_k(line_base(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,]$daily_rainfall,
+                                                   data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,]$YEARMONTH,
+                                                   "2021 Monthly Total Rainfall (mm)",
+                                                   "Year - Month",
+                                                   "Rainfall (mm)")) 
+#monthly average solar exposure 2010 and 2021
+mthly_average_solar_hist_2010 <- line_base(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,]$daily_solar,
+                                           data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,]$YEARMONTH,
+                                           "2010 Monthly Average Solar Exposure (kj/m**2)",
+                                           "Year - Month",
+                                           "Solar Exposure (kj/m**2)") 
+mthly_average_solar_hist_2021 <- line_base(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,]$daily_solar,
+                                           data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,]$YEARMONTH,
+                                           "2021 Monthly Average Solar Exposure (kj/m**2)",
+                                           "Year - Month",
+                                           "Solar Exposure (kj/m**2)") 
+#Display the charts for fig 3
+grid.arrange(mthly_total_energy_2010,
+             mthly_total_energy_2021,
+             mthly_average_temperature_hist_2010,
+             mthly_average_temperature_hist_2021,
+             mthly_total_rainfall_hist_2010,
+             mthly_total_rainfall_hist_2021,
+             mthly_average_solar_hist_2010,
+             mthly_average_solar_hist_2021,
+             ncol=2,
+             top = textGrob("Figure 3. 2010 and 2021",
+                            gp=gpar(fontsize=16,font=1))
+)
+
+
+########################################################
+##Figure 4 Boxplot of Energy Demand by Year/Month/Hour##
+########################################################
+
+#create function for boxplot 
+box_base <- function(y,x,titlelab,xlab,ylab) { 
+  ggplot(data=NULL) + 
+    geom_boxplot(aes(x = x, y = y))+
+    labs(title = titlelab, 
+         x = xlab, 
+         y = ylab) +
+    theme(legend.key.size = unit(1, 'cm'), 
+          legend.key.height = unit(0.5, 'cm'), 
+          legend.key.width = unit(0.5, 'cm'), 
+          legend.title = element_text(size=7), 
+          legend.text = element_text(size=7),
+          axis.title=element_text(size=8,face="bold"),
+    )
+}
+
+#Boxplot by year
+box_demand_year <- unit_k(box_base(data[data$YEAR <= 2021,]$TOTALDEMAND,
+                                   as.factor(data[data$YEAR <= 2021,]$YEAR),
+                                   "Average Hourly Total Energy Demand by Year",
+                                   "Year",
+                                   "Total Energy Demand")
+)
+#Boxplot by Month
+box_demand_month <- unit_k(box_base(data[data$YEAR <= 2021,]$TOTALDEMAND,
+                                    as.factor(data[data$YEAR <= 2021,]$MONTH),
+                                    "Average Hourly Total Energy Demand by Month",
+                                    "Month",
+                                    "Total Energy Demand")
+)
+#Boxplot by Hour
+box_demand_hour <- unit_k(box_base(data[data$YEAR <= 2021,]$TOTALDEMAND,
+                                   as.factor(data[data$YEAR <= 2021,]$HOUR),
+                                   "Average Hourly Total Energy Demand by Hour",
+                                   "Hour",
+                                   "Total Energy Demand")
+)
+
+#Create Fig 4                                
+grid.arrange(box_demand_year,
+             box_demand_month,
+             box_demand_hour, 
+             ncol=1,
+             top = textGrob("Figure 4 Boxplot of Hourly Total demand by Year/Month/Hour",
+                            gp=gpar(fontsize=16,font=1)))
+
+
+###########################################################
+##Figure 5 Density plot of Total Energy Demand and Season##
+###########################################################
+#Create base function for density plot
+density_base <- function(x,group,titlelab,xlab,legenedlab) { 
+  season_scatter <- ggplot(data=NULL,aes(x=x, color=group)) +
+    geom_density() + 
+    labs(title = titlelab, 
+         x = xlab,
+         color = legenedlab) +
+    theme(legend.key.size = unit(1, 'cm'), 
+          legend.key.height = unit(0.5, 'cm'), 
+          legend.key.width = unit(0.5, 'cm'), 
+          legend.title = element_text(size=7), 
+          legend.text = element_text(size=7),
+          axis.title=element_text(size=8,face="bold"))
+}
+
+#add to make x axis k
+unit_k_x <- function(i){
+  i+scale_x_continuous(labels = label_number(suffix = " k", scale = 1e-3))
+}
+
+season_demand_density <- unit_k_x(density_base(data_Excl_202208$TOTALDEMAND,
+                                               data_Excl_202208$SEASON,
+                                               "Density of Total Energy Demand per Hour by Season",
+                                               "Total Energy Demand"
+                                               , "Seasons")
+)
+
+month_demand_density <- unit_k_x(density_base(data_Excl_202208$TOTALDEMAND,
+                                              as.factor(data_Excl_202208$MONTH),
+                                              "Density of Total Energy Demand per Hour by Month",
+                                              "Total Demand",
+                                              "Months")
+)
+#Draw Figure 5
+grid.arrange(season_demand_density,
+             month_demand_density,
+             ncol=1,
+             top = textGrob("Figure 5 Density of total demand by Season/Month",
+                            gp=gpar(fontsize=18,font=1)))
+
+############################################################
+##Figure 6 scatter plot of Demand against different fields##
+############################################################
+
+##Create scatterplot of temperature versus total demand
+data_sample <- sample_frac(data_Excl_202208, 1)
+
+#create function for scatter 
+scatter_base <- function(y,x,titlelab,xlab,ylab,legenedlab) { 
+  season_scatter <- ggplot(data=NULL,aes(x, y)) + 
+    geom_point(color='darkblue') +
+    labs(title = titlelab, 
+         x = xlab, 
+         y=ylab) +
+    theme(legend.key.size = unit(1, 'cm'), 
+          legend.key.height = unit(0.5, 'cm'), 
+          legend.key.width = unit(0.5, 'cm'), 
+          legend.title = element_text(size=7), 
+          legend.text = element_text(size=7),
+          axis.title=element_text(size=8,face="bold"))
+}
+
+#base temp demand scatter
+
+base_demand_temp_scatter <- unit_k(scatter_base(data_sample$TOTALDEMAND,
+                                                data_sample$TEMPERATURE,
+                                                "Against Hourly Temperature",
+                                                "Average Temperature (Hourly)",
+                                                "Total Energy Demand (Hourly)"
+)
+)
+
+
+#Aggregate data to daily due to solar and rainfall being recorded daily
+data_daily_solar_rainfall <- data_Excl_202208 %>%
+  group_by(DATE) %>%
+  summarise(Total_daily_Demand = sum(TOTALDEMAND),
+            solar_daily = mean(DAILY_GLBL_SOLAR_EXPOSR),
+            rainfall_daily = mean(DAILY_RAINFALL_AMT_MM))
+
+data_daily_solar_rainfall_sample <- sample_frac(data_daily_solar_rainfall, 1)
+
+
+#base rainfall demand scatter
+base_demand_rainfall_scatter <- unit_k(scatter_base(data_daily_solar_rainfall_sample$Total_daily_Demand,
+                                                    data_daily_solar_rainfall_sample$rainfall_daily,
+                                                    "Against Daily Rainfall",
+                                                    "Total Rainfall (Daily)",
+                                                    "Total Energy Demand (Daily)"
+)
+)
+
+#base solar demand scatter
+base_demand_solar_scatter <- scatter_base(data_daily_solar_rainfall_sample$Total_daily_Demand,
+                                          data_daily_solar_rainfall_sample$solar_daily,
+                                          "Against Daily Solar Exposure",
+                                          "Total Solar Exposure (Daily)",
+                                          "Total Energy Demand (Daily)")
+
+#Draw Figure 6
+grid.arrange(base_demand_temp_scatter,
+             base_demand_rainfall_scatter,
+             base_demand_solar_scatter,
+             ncol=2,
+             top = textGrob("Figure 6 Scatterplot of Energy Demand against Various Factors",
+                            gp=gpar(fontsize=18,font=1)))
+
+
+
+###############################
+##Figure 7 Correlation matrix##
+###############################
+#create spring and autumn flag for correlation
+data_Excl_202208$spring_flag <- if_else(data_Excl_202208$SEASON == 'SPRING',1,0)
+data_Excl_202208$autumn_flag <- if_else(data_Excl_202208$SEASON == 'AUTUMN',1,0)
+
+dat_correl <- data_Excl_202208 %>%
+  ungroup() %>%
+  select(TOTALDEMAND,
+         DATEHOUR,
+         TEMPERATURE,
+         DAILY_RAINFALL_AMT_MM,
+         DAILY_GLBL_SOLAR_EXPOSR,
+         BUSINESS_DAY,
+         DuringDay,
+         pub_holiday_flag,
+         spring_flag,
+         summer_flag,
+         autumn_flag,
+         winter_flag,
+         HOT_DAY,
+         HOT_NIGHT,
+         EXTREME_HOT_DAY,
+         EXTREME_HOT_NIGHT,
+         COLD_DAY,
+         COLD_NIGHT,
+         EXTREME_COLD_DAY,
+         EXTREME_COLD_NIGHT) %>% 
+  mutate_all(as.numeric)
+corr <- round(cor(dat_correl), 1)
+#Draw Figure 7
+ggcorrplot(corr, p.mat = cor_pmat(dat_correl),
+           hc.order = FALSE, 
+           type = "upper",
+           color = c("#FC4E07", "white", "#00AFBB"),
+           outline.col = "white", lab = TRUE,
+           tl.cex = 5, lab_size = 2,
+           title = "Figure 7 Correlation Matrix of Base Data")
+
+################################################################
+##Figure 8/9 Month and Hour correlation with total energy demand##
+################################################################
+#Add Month and Hour indicators (numeric) 
+data_Excl_202208[paste0("Month_", 1:12)] <- as.data.frame(t(sapply(data_Excl_202208$MONTH, tabulate, 12)))
+data_Excl_202208 <- data_Excl_202208 %>% 
+  mutate(dummy = 1, Hour1 = HOUR) %>%
+  pivot_wider(names_from = Hour1, values_from = dummy,names_glue = "HOUR_{Hour1}", values_fill = 0)
+
+#convert month and hour indicator to factors - not required at the moment
+#data_Excl_202208[paste0("Month_", 1:12)] <- lapply(data_Excl_202208[paste0("Month_", 1:12)], factor)
+#data_Excl_202208[paste0("HOUR_", 0:23)] <- lapply(data_Excl_202208[paste0("HOUR_", 0:23)], factor)
+
+#Create month correlation matrix
+dat_month_correl <- data_Excl_202208 %>%
+  ungroup() %>%
+  select(TOTALDEMAND,
+         starts_with("Month_")
+  ) %>% 
+  mutate_all(as.numeric)
+corr <- round(cor(dat_month_correl), 1)
+
+#Draw Figure 8
+ggcorrplot(corr, p.mat = cor_pmat(dat_month_correl),
+           hc.order = FALSE, 
+           type = "upper",
+           color = c("#FC4E07", "white", "#00AFBB"),
+           outline.col = "white", lab = TRUE,
+           tl.cex = 5, lab_size = 2,
+           title = "Figure 8 Correlation Matrix of Total Energy Demand by Month")
+
+#Create hour correlation matrix
+#Create month correlation matrix
+dat_hour_correl <- data_Excl_202208 %>%
+  ungroup() %>%
+  select(TOTALDEMAND,
+         starts_with("HOUR_")
+  ) %>% 
+  mutate_all(as.numeric)
+corr <- round(cor(dat_hour_correl), 1)
+
+#Draw Figure 9
+ggcorrplot(corr, p.mat = cor_pmat(dat_hour_correl),
+           hc.order = FALSE, 
+           type = "upper",
+           color = c("#FC4E07", "white", "#00AFBB"),
+           outline.col = "white", lab = TRUE,
+           tl.cex = 5, lab_size = 2,
+           title = "Figure 9 Correlation Matrix of Total Energy Demand by Hour")
+
+##################################################
+##Figure 10 Lagged correlation of energy demand##
+##################################################
+# Create a data frame to store lagged correlations
+lags <- 1:24  # Example lag values from 1 to 24 hours
+lagged_correlations <- data.frame(Lag = lags)
+
+# Function to calculate lagged correlations
+calculate_lagged_correlations <- function(data, variable, lag) {
+  lagged_variable <- data[[variable]][1:(nrow(data) - lag)]
+  lagged_demand <- data$TOTALDEMAND[(lag + 1):nrow(data)]
+  correlation <- cor(lagged_variable, lagged_demand, use = "complete.obs")
+  return(correlation)
+}
+
+# Calculate lagged correlations for total demand 
+variable_demand <- "TOTALDEMAND"
+lagged_correlations$totaldemand_Correlation <- sapply(lags, function(lag) {
+  calculate_lagged_correlations(data_Excl_202208, variable_demand, lag)
+})
+
+#plot total demand lag correlation
+plot_demand <- ggplot(lagged_correlations, aes(x = Lag))+ 
+  geom_line(aes(y = totaldemand_Correlation), color = "blue", linetype = "solid")+
+  labs(
+    title = "Lagged Correlations for Total demand",
+    x = "Lag (Hours)",
+    y = "Correlation"
+  ) +
+  theme_minimal()
+
+grid.arrange(plot_demand, 
+             ncol = 1,
+             top = textGrob("Figure 10 Lagged Correlation of Total Energy Demand",
+                            gp=gpar(fontsize=18,font=1)))
 
 ###########################################################
 ##Create line chart of forecast versus actual 2010 & 2021##
@@ -575,319 +998,5 @@ grid.arrange(actual_monthly_by_year,
              AEMO_residual,
              ncol=1)
 
-##########################################
-##Create total demand / seasonal boxplot##
-##########################################
-
-ggplot(data) + 
-  geom_boxplot(aes(x = SEASON, y = TOTALDEMAND, group = SEASON)) +
-  labs(title='Demand by Season') +
-  labs(title = "Total Demand by Season", 
-       x = "Season", 
-       y = "Total Hourly Demand") +
-  theme(legend.key.size = unit(1, 'cm'), 
-        legend.key.height = unit(0.5, 'cm'), 
-        legend.key.width = unit(0.5, 'cm'), 
-        legend.title = element_text(size=7), 
-        legend.text = element_text(size=7),
-        axis.title=element_text(size=8,face="bold")) +
-  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
-#Higher demand in Winter as previously identified
-
-##############################################################
-##Create 2x2 scatter plot of Demand against different fields##
-##############################################################
-
-##Create scatterplot of temperature versus total demand
-#Sampling at 10% for run times sake
-data_sample <- sample_frac(data, 0.1)
-
-#create function for scatter 
-scatter_base <- function(y,x,titlelab,xlab,ylab,legenedlab) { 
-  season_scatter <- ggplot(data=NULL,aes(x, y)) + 
-    geom_point(color='darkblue') +
-    labs(title = titlelab, 
-         x = xlab, 
-         y=ylab) +
-    theme(legend.key.size = unit(1, 'cm'), 
-          legend.key.height = unit(0.5, 'cm'), 
-          legend.key.width = unit(0.5, 'cm'), 
-          legend.title = element_text(size=7), 
-          legend.text = element_text(size=7),
-          axis.title=element_text(size=8,face="bold")) +
-    scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
-}
-
-#base temp demand scatter
-
-base_demand_temp_scatter <- scatter_base(data_sample$TOTALDEMAND,
-                                         data_sample$TEMPERATURE,
-                                         "Against Hourly Temperature",
-                                         "Average Temperature (Hourly)",
-                                         "Total Energy Demand (Hourly)")
-
-
-#Aggregate data to daily due to solar and rainfall being recorded daily
-data_daily_solar_rainfall <- data %>%
-  group_by(DATE) %>%
-  summarise(Total_daily_Demand = sum(TOTALDEMAND),
-            solar_daily = mean(DAILY_GLBL_SOLAR_EXPOSR),
-            rainfall_daily = mean(DAILY_RAINFALL_AMT_MM))
-
-data_daily_solar_rainfall_sample <- sample_frac(data_daily_solar_rainfall, 0.1)
-
-
-#base rainfall demand scatter
-#Little to none relevance
-base_demand_rainfall_scatter <- scatter_base(data_daily_solar_rainfall_sample$Total_daily_Demand,
-                                             data_daily_solar_rainfall_sample$rainfall_daily,
-                                             "Against Daily Rainfall",
-                                             "Total Rainfall (Daily)",
-                                             "Total Energy Demand (Daily)")
-
-#base solar demand scatter
-#Little to none relevance
-base_demand_solar_scatter <- scatter_base(data_daily_solar_rainfall_sample$Total_daily_Demand,
-                                          data_daily_solar_rainfall_sample$solar_daily,
-                                          "Against Daily Solar Exposure",
-                                          "Total Solar Exposure (Daily)",
-                                          "Total Energy Demand (Daily)")
-
-#Combine as grid
-grid.arrange(base_demand_temp_scatter,
-             base_demand_rainfall_scatter,
-             base_demand_solar_scatter,
-             ncol=2,
-             top = textGrob("Energy Demand against Various Factors",
-                            gp=gpar(fontsize=18,font=1)))
-
-
-#########################################################
-##Create 2x2 scatter plot of Demand against temperature## 
-##by different factors                                 ##
-#########################################################
-
-#create function for scatter and color
-scatter_color <- function(y,x,color,titlelab,xlab,ylab,legenedlab) { 
-  season_scatter <- ggplot(data=NULL,aes(x, y , color=color)) + 
-    geom_point() +
-    labs(title = titlelab, 
-         x = xlab, 
-         y=ylab,
-         colour = legenedlab) +
-    theme(legend.key.size = unit(1, 'cm'), 
-          legend.key.height = unit(0.5, 'cm'), 
-          legend.key.width = unit(0.5, 'cm'), 
-          legend.title = element_text(size=7), 
-          legend.text = element_text(size=7),
-          axis.title=element_text(size=8,face="bold")) +
-    scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
-}
-
-
-#Total demand by temperature, coloured by seasons
-#Can keep seasonal indicator for Summer/Winter, Autumn/Spring isn't too significant visually
-scatter_season <- scatter_color(data_sample$TOTALDEMAND,
-              data_sample$TEMPERATURE,
-              data_sample$SEASON,
-              "By Seasons",
-              "Average Temperature (Hourly)",
-              "Total Energy Demand (Hourly)",
-              "Season")
-
-#By Extremes
-#Cold day, Extreme cold day, and hot day are more noticeable.
-scatter_extreme <- scatter_color(data_sample$TOTALDEMAND,
-              data_sample$TEMPERATURE,
-              data_sample$EXTREMES,
-              "By Extreme Temperatures",
-              "Average Temperature (Hourly)",
-              "Total Energy Demand (Hourly)",
-              "Extremeties") 
-
-#By public holiday
-#No noticeable difference
-scatter_pub_hol <- scatter_color(data_sample$TOTALDEMAND,
-              data_sample$TEMPERATURE,
-              data_sample$pub_holiday_flag,
-              "By Public Holiday",
-              "Average Temperature (Hourly)",
-              "Total Energy Demand (Hourly)",
-              "Public Holiday")
-
-#By business day
-scatter_bus_day <- scatter_color(data_sample$TOTALDEMAND,
-              data_sample$TEMPERATURE,
-              data_sample$BUSINESS_DAY,
-              "By Business Day",
-              "Average Temperature (Hourly)",
-              "Total Energy Demand (Hourly)",
-              "Business Day")
-
-#Combine as grid
-grid.arrange(scatter_season,
-             scatter_extreme,
-             scatter_pub_hol,
-             scatter_bus_day,
-             ncol=2,
-             top = textGrob("Hourly Total Energy Demand against Average HourlyTemperature",
-                            gp=gpar(fontsize=18,font=1)))
-
-
-
-
-# Create separate scatterplots for each season
-season_colors <- c("SPRING" = "green", "SUMMER" = "red", "AUTUMN" = "orange", "WINTER" = "blue")
-scatterplots <- lapply(unique(data$SEASON), function(season) {
-  p <- ggplot(data[data$SEASON == season, ], aes(x = TEMPERATURE, y = TOTALDEMAND, color = SEASON)) +
-    geom_point(alpha = 0.5) +
-    scale_color_manual(values = season_colors) +
-    labs(title = paste("Scatterplot for", season), x = "Temperature", y = "Total Demand")
-  return(p)
-})
-
-# Combine the scatterplots into a grid
-grid <- wrap_plots(scatterplots, ncol = 2)
-
-# Display the grid
-grid
-# Create a pairplot with correlations
-pair_plot <- ggpairs(data, 
-                     columns = c("TOTALDEMAND", "TEMPERATURE"), 
-                     title = "Pairplot of TOTALDEMAND vs TEMPERATURE",
-                     mapping = aes(color = SEASON), 
-                     lower = list(continuous = "points"),
-                     axisLabels = "show"
-)
-
-# Print the pairplot
-print(pair_plot)
-
-# create mutivariate analyis plot  with correlations
-pair_plot_multivariate <- ggpairs(data, 
-                                  columns = c("TOTALDEMAND", "DAILY_RAINFALL_AMT_MM", "DAILY_GLBL_SOLAR_EXPOSR"),
-                                  title = "Multivariate Pairplot of Total Demand, Rainfall, and Solar Exposure",
-                                  mapping = aes(color = SEASON),  # Color by season (adjust as needed)
-                                  upper = "blank",
-                                  diag = "blank",
-                                  lower = list(continuous = "points"),
-                                  axisLabels = "show"
-)
-
-# Print the pair plot
-print(pair_plot_multivariate)
-# Lagging plot vs total demand
-
-
-# Define the lag values you want to explore
-lags <- c(1, 2, 3, 4, 5)  # Add or adjust lag values as needed
-
-# Create a data frame to store lagged correlations
-lagged_correlations <- data.frame(Lag = lags)
-
-# Function to calculate lagged correlations
-calculate_lagged_correlations <- function(data, variable, lag) {
-  lagged_variable <- data[[variable]][1:(nrow(data) - lag)]
-  lagged_demand <- data$TOTALDEMAND[(lag + 1):nrow(data)]
-  correlation <- cor(lagged_variable, lagged_demand, use = "complete.obs")
-  return(correlation)
-}
-
-# Calculate lagged correlations for solar exposure
-variable_solar <- "DAILY_GLBL_SOLAR_EXPOSR"
-lagged_correlations$Solar_Exposure_Correlation <- sapply(lags, function(lag) {
-  calculate_lagged_correlations(data, variable_solar, lag)
-})
-
-# Calculate lagged correlations for rainfall
-variable_rainfall <- "DAILY_RAINFALL_AMT_MM"
-lagged_correlations$Rainfall_Correlation <- sapply(lags, function(lag) {
-  calculate_lagged_correlations(data, variable_rainfall, lag)
-})
-
-# Create separate plots for solar exposure and rainfall
-plot_solar <- ggplot(lagged_correlations, aes(x = Lag, y = Solar_Exposure_Correlation)) +
-  geom_line() +
-  labs(title = "Lagged Correlations for Solar Exposure",
-       x = "Lag (Hours)", y = "Correlation") +
-  theme_minimal()
-
-plot_rainfall <- ggplot(lagged_correlations, aes(x = Lag, y = Rainfall_Correlation)) +
-  geom_line() +
-  labs(title = "Lagged Correlations for Rainfall",
-       x = "Lag (Hours)", y = "Correlation") +
-  theme_minimal()
-
-# Arrange and display both plots side by side
-grid.arrange(plot_solar, plot_rainfall, ncol = 2)
-
-# create a plot lagging correlation vs season
-
-# Filter data by season
-seasons <- unique(data$SEASON)
-
-# Function to calculate lagged correlations
-calculate_lagged_correlations <- function(data, variable, lag) {
-  lagged_variable <- data[[variable]][1:(nrow(data) - lag)]
-  lagged_demand <- data$TOTALDEMAND[(lag + 1):nrow(data)]
-  correlation <- cor(lagged_variable, lagged_demand, use = "complete.obs")
-  return(correlation)
-}
-
-# Create a data frame to store lagged correlations
-lags <- 1:24  # Example lag values from 1 to 24 hours
-lagged_correlations <- data.frame(Lag = lags)
-
-# Calculate lagged correlations for each season and variable (solar and rainfall)
-for (season in seasons) {
-  filtered_data <- data %>% filter(SEASON == season)
-  
-  # Calculate lagged correlations for solar exposure
-  variable_solar <- "DAILY_GLBL_SOLAR_EXPOSR"
-  lagged_correlations[paste("Solar_Exposure_Correlation", season, sep = "_")] <- sapply(
-    lags,
-    function(lag) {
-      calculate_lagged_correlations(filtered_data, variable_solar, lag)
-    }
-  )
-  
-  # Calculate lagged correlations for rainfall
-  variable_rainfall <- "DAILY_RAINFALL_AMT_MM"
-  lagged_correlations[paste("Rainfall_Correlation", season, sep = "_")] <- sapply(
-    lags,
-    function(lag) {
-      calculate_lagged_correlations(filtered_data, variable_rainfall, lag)
-    }
-  )
-}
-
-# Create two plots side by side
-plot_solar <- ggplot(lagged_correlations, aes(x = Lag)) +
-  geom_line(aes(y = Solar_Exposure_Correlation_SPRING), color = "green", linetype = "solid") +
-  geom_line(aes(y = Solar_Exposure_Correlation_SUMMER), color = "red", linetype = "dashed") +
-  geom_line(aes(y = Solar_Exposure_Correlation_AUTUMN), color = "orange", linetype = "dotted") +
-  geom_line(aes(y = Solar_Exposure_Correlation_WINTER), color = "blue", linetype = "dotdash") +
-  labs(
-    title = "Lagged Correlations for Solar Exposure by Season",
-    x = "Lag (Hours)",
-    y = "Correlation"
-  ) +
-  theme_minimal()
-
-plot_rainfall <- ggplot(lagged_correlations, aes(x = Lag)) +
-  geom_line(aes(y = Rainfall_Correlation_SPRING), color = "green", linetype = "solid") +
-  geom_line(aes(y = Rainfall_Correlation_SUMMER), color = "red", linetype = "dashed") +
-  geom_line(aes(y = Rainfall_Correlation_AUTUMN), color = "orange", linetype = "dotted") +
-  geom_line(aes(y = Rainfall_Correlation_WINTER), color = "blue", linetype = "dotdash") +
-  labs(
-    title = "Lagged Correlations for Rainfall by Season",
-    x = "Lag (Hours)",
-    y = "Correlation"
-  ) +
-  theme_minimal()
-
-# Display the two plots side by side
-library(gridExtra)
-grid.arrange(plot_solar, plot_rainfall, ncol = 2)
 
 
