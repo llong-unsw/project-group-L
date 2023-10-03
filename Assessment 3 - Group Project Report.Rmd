@@ -160,7 +160,7 @@ One thing to note with solar and rainfall datasets however, would be that the fi
 
 To clean the data to ensure there are no null measurements for any timestamp, for any column that contains measurement, methods such as linear interpolation and last observation carried forward will be utilised [@ZhangYifan2022Hmdi]. Initially, simple imputation was considered due to simplicity, however because such a method is also prone to bias therefore will not be applied in this case [@EmmanuelTlamelo2021Asom]. Another idea was populating missing temperature via regression based interpolation methods [@XuCheng-Dong2013IoMT]. However, given the temperature data covers only one region, as well as missing timegaps being relatively small in almost all cases, linear interpolation will be sufficient due to simplicity. To summarise, missing total demand, temperature, daily rainfall, and daily solar exposure will be filled via linear interpolation, and missing AEMO forecast will be populated via last observation carried forward to prevent skewing from original forecast.
 
-##Consolidation and Aggregation of final dataset
+## Consolidation and Aggregation of final dataset
 
 **Dataset Joins**
 
@@ -189,7 +189,7 @@ Extreme temperatures of day and night fields will be derived via guidelines prov
 - Extreme Cold Night= Under 0 degrees and during day equals to 0
 - Cold Night= Under 5 degrees and during day equals to 0
 
-##Assumption
+## Assumption
 
 Based on the data used in this project, as well as various studies completed in the past, three main assumptions could be made with regards to behaviour of total energy demand upon interaction with various factors. 
 
@@ -251,32 +251,37 @@ Looking at the general trend over time for all variables from figure 1, the only
 Figure 2 displays a line chart of data aggregated to a month level. Aggregating data to monthly level displays a clear smoothing impact to the line charts. 
 
 
-Looking at Trend via individual years
+**Looking at Trend via individual years**
+
 When the data is viewed at a monthly level via line chart in Figure 2, clear seasonality can be identified through having smoother lines in total energy demand, temperature, and solar exposure. Total rainfall viewed at monthly level still does not exhibit any seasonality. From an assumption perspective, traces of energy demand being affected by temperature are starting to appear. Also with regards to assumption three, the trend chart of monthly total energy demand over time is starting to display a slow decline in total energy demand over the years. 
 
 
 When the monthly trend is viewed at individual year level as per Figure 3, it can be identified that the trend did not change significantly between 2010 and 2021, for energy demand, average temperature, and average solar exposure. The reason why 2022 is not used despite being the final year recorded is because the data used in this project does not contain all months of 2022. It can also be noted that total energy demand peaks when average monthly temperature is at its highest or lowest point. Additionally, solar exposure when magnified to monthly level surfaces its relationship with temperature clearly. Furthermore, rainfall's trend remained stochastic, exhibiting no relationship with other variables.
 
-Total Energy Demand via Boxplot at Yearly, Monthly, and Hourly level
+**Total Energy Demand via Boxplot at Yearly, Monthly, and Hourly level**
+
 Through using boxplot, it is possible to see the distribution of total energy demand across time. Figure 4 displays total energy demand is plotted against various time variables, specifically year, month, and hour. Each of these views will be discussed individually as per below. 
 
-Year
+**Year**
+
 At yearly view we can see the fluctuation of max and min total energy demand across time. The most key point taken from this view would be  the slight decrease of average total energy consumption per hour across the years. This is an interesting point because it contradicts assumption 3, where an increase of total energy demand is expected due to an increase of extreme temperature occurrences.  Thus, we can rule the assumption to be false, where yearly average hourly total energy demand is indeed decreasing. 
 
-Month
+**Month**
+
 At a monthly level, it can be identified that months of June, July, August, January, and February have higher average hourly total energy demand compared to the other months. This further verifies assumption 1 to be true, where total energy demand is expected to increase during hotter and colder months, as the months mentioned usually have the highest or lowest temperatures as per displayed in figure 2 and 3. Out of the previously highlighted months, June and July have the highest average total energy demand. This potentially shows that most people are more tolerant to hotter rather than colder temperatures, as June and July happen to have the coldest temperatures as per Figure 2 and 3. Furthermore, the boxplot of total energy by month suggests that months would be the best variable to use in terms of predictive modelling rather than seasons, as not necessarily all months within the season have higher total energy demand. For example, August is part of winter but has lower average total energy demand when compared to June and July.
 
-Hour
+**Hour**
+
 Looking at hourly boxplot of total energy demand, the key point identified would be total energy demand is highest between 8 am and 7 pm, and is lowest between 2 am to 6 am. This verified assumption 2, of total energy demand to be higher during hours of human activity. Hourly boxplot verifies that hour can be used as a variable in terms of modelling, as there is clearly a pattern exhibited by the chart particularly around the mean of total energy demand per hour.
 
 Upon inspecting the densities of total energy demand by seasons and months via Figure 5, it can be further identified that the only group that has a visible different mean compared to the other seasons is winter. However upon looking at this at a monthly level, it can be identified that August does indeed have much wider distribution compared to June and July, as shown in figure 4 also. This further indicates that months should be used instead of seasons in predictive models in order to reduce noise.  
 
 
-Total energy demand by temperature, rainfall, and solar exposure
+**Total energy demand by temperature, rainfall, and solar exposure**
 
 Scatter Plot of figure 6 has been created to display the relationship between total energy demand and temperature, rainfall, and solar exposure. At top level, all scatter plots created in figure 6 are exhibiting great spread, suggesting correlation to be more useful in terms of strength of relationship. Nevertheless, it is still possible to get some characteristics from these relationships, particularly for temperature. From the total energy demand against temperature scatterplot, it is possible to identify that total energy demand increases when temperature shifts either left or right from 20 degrees. Rainfall and Solar scatter plots on the other hand exhibited little trend, where rainfall scatterplot is very much just stochastic when compared to total energy demand.
 
-Correlation Matrix of Total Energy Demand
+**Correlation Matrix of Total Energy Demand**
 
 Using the correlation matrix, it is possible to identify how strong are the relationships between each variable [@HaddAlexandria2021Ucm]. When the data is inspected at correlation perspective via figure 7, from total energy demand perspective, the highest correlated variables are nearly always associated with cold temperature. For example, it is understandable where temperature does not hold a strong correlation with total energy demand, given in figure 6, where the scatter plot does not exhibit a linear trend; however, from the correlation matrix of  figure 7, fields such as cold day, extreme cold day, and winter flag hold some of the highest correlation with total energy demand, indicating triggering those flags would result in higher total energy demand. Another field that holds a high correlation of 0.5 with total energy demand is during_day (flagging hours between 8 am ~ 8 pm), and this again strengthens assumption 2 of energy consumption being higher during human active hours. Furthermore, the negative correlation of -0.2 of datehour with total energy demand again contradicts assumption 3, hence we can settle with the statement that total energy demand is indeed gradually reducing over time. 
 
@@ -286,7 +291,8 @@ Upon inspecting the correlation matrix of total energy demand against hour flags
 
 Overall, the correlation matrix  from figure 7,8 and 9 shows us that in terms of predictive model, the fields that definitely should be used are extreme temperature flags, hour flags, and month flags.
 
-Lagged Correlation of Total Energy Demand
+**Lagged Correlation of Total Energy Demand**
+
 Finally, lagged correlation of total energy demand will be investigated. Lagged correlation looks at the correlation between time shifted time series data [@ZagourasAthanassios2015Otro]. Essentially what this section is after is finding the best lag that can be used to predict future total energy demand. In this case, lags of 0 to 24 will be tested. The result as per figure 10, is that the more correlated lag would be lag of 1 and 24, which 24 will be ignored as it is essentially the same time given 24 hours. Therefore, total energy demand has the highest lagged correlation when shifted with a lag of 1.
 
 \newpage
@@ -456,7 +462,7 @@ The table above shows that radial SVRs outperform linear SVRs, which can be expl
 
 The charts below compare the fitted versus actual values for the best and worst SVR models from the tuning process:
 
-```{r svr_best_jan, out.height = "40%", out.width = "120%"}
+```{r svr_best_jan, out.height = "35%", out.width = "120%"}
 # best model
 plot_predictions(
   actual = dt_model[model_set == "test", TOTALDEMAND]
@@ -473,7 +479,7 @@ The chart above demonstrates that the best SVR model had strong forecasting perf
 
 Meanwhile, the chart below, which used an SVR with a linear kernel and an epsilon value of one had difficulties estimating the peaks and troughs of each day, consistently underestimating the magnitudes in either directions.
 
-```{r svr_worst_jan, out.height = "40%", out.width = "120%"}
+```{r svr_worst_jan, out.height = "35%", out.width = "120%"}
 # best model
 plot_predictions(
   actual = dt_model[model_set == "test", TOTALDEMAND]
@@ -696,6 +702,7 @@ plot_predictions(
   , input_month = 11
 ) 
 ```
+
 Finally, the random forest model seemed to have the most trouble forecasting the troughs in November 2021, over-estimating energy demands in these periods overall. 
 
 ```{r rf_final_plot, out.height = "40%", out.width = "120%"}
@@ -710,18 +717,15 @@ plot_predictions(
 
 # Discussion
 
-TODO: flesh this section out
+Although the modelling results obtained in this report are promising and have out-performed the AEMO benchmark as we've set out to do, there are still potential improvements to consider when conducting future analysis and modelling. 
 
-Potential improvements to consider:
+Exploring more complex models as referenced in the literature review such as Generalised Additive Models [@McCullochJames2020IEDa], Long Short-Term Memory recurrent neural networks [@AlonsoAndr?sM.2020ASSL], and deep Feedforward Neural Networks [@9282124] could address some limitations experienced by the models chosen in this project, such as accounting for seasonality and being more robust against outliers. 
 
-- More complex models (outside the scope of the team's experience): recurrent neural networks, anything else from literature review
+Furthermore, some of the machine learning processes surrounding tuning hyperparameters consumed large amounts of computational resources including runtime and storage memory. Thus, some workarounds had to be implemented in this project such as limiting the possible combinations of hyperparameters considered and putting stopping conditions to prevent the algorithms from running for too long. Having access to more resources from this domain could potentially result in more optimised models and thus, better forecasting results.
 
-- Greater computational resources: some tuning decisions in SVM and random forest were constrained by the 
-runtime and memory size
+Another potential aspect which could be considered for future work is utilising multivariate analysis and modelling. The models within this project are limited in scope to only forecasting one hour ahead. However, having a multivariate response variable for consecutive future hours could expand on these results by better accounting for hours of the day and giving the client a better visibility of the demand forecast horizon. 
 
-- Multivariate analysis: being able to forecast multiple hours ahead at a given time  
-
-- Access to more data: hourly weather conditions like rainfall, solar exposure, wind speed, humidity
+Finally, there were some challenges around data acquisition, resulting in sub-optimal features when it comes to predicting future demand. In particular, the solar and rainfall data used was at a daily level, which is less granular than the hourly demand that was being forecasted. This was evident in the coefficient and variable importance metrics in the lasso and random forest regression models respectively, where both scored relatively low in significance. Having hourly data for weather measurements such as rainfall, solar exposure, wind speed and humidity could further improve on the existing models in this report.  
 
 # Conclusion
 
