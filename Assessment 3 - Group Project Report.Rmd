@@ -269,7 +269,7 @@ grid.arrange(mthly_total_energy,
              mthly_total_rainfall_hist,
              mthly_average_solar_hist,
              ncol=1,
-             top = textGrob("Figure 2. 2010-01 ~ 2022-07",
+             top = textGrob("Figure 2. Line chart over time at monthly level 2010-01 ~ 2022-07",
                             gp=gpar(fontsize=16,font=1))
 )
 ```
@@ -347,16 +347,28 @@ At a monthly level, it can be identified that months of June, July, August, Janu
 
 Looking at hourly boxplot of total energy demand, the key point identified would be total energy demand is highest between 8 am and 7 pm, and is lowest between 2 am to 6 am. This verified assumption 2, of total energy demand to be higher during hours of human activity. Hourly boxplot verifies that hour can be used as a variable in terms of modelling, as there is clearly a pattern exhibited by the chart particularly around the mean of total energy demand per hour.
 
-```{r Figure 7}
-#Draw Figure 7
+```{r Figure 7.1}
+#Draw Figure 7.1
 grid.arrange(season_demand_density,
-             month_demand_density,
-             extreme_demand_density,
              ncol=1,
-             top = textGrob("Figure 7 Density of total demand by Season/Month/Extreme Temperature",
+             top = textGrob("Figure 7.1 Density of total demand by Season",
                             gp=gpar(fontsize=18,font=1)))
 ```
-Upon inspecting the densities of total energy demand by seasons and months via Figure 7, it can be further identified that the only group that has a visible different mean compared to the other seasons is winter. However upon looking at this at a monthly level, it can be identified that August does indeed have much wider distribution compared to June and July, as shown in figure 6 also. This further indicates that months should be used instead of seasons in predictive models in order to reduce noise. Additionally, if the density of total energy demand is grouped via extreme temperature, it can be identified that the overlap is much less when compared to when grouped by seasons and months, indicating extreme temperature flags would be another potential contender to be used in terms of creating a predictive model.
+```{r Figure 7.2}
+#Draw Figure 7.2
+grid.arrange(month_demand_density,
+             ncol=1,
+             top = textGrob("Figure 7.2 Density of total demand by Month",
+                            gp=gpar(fontsize=18,font=1)))
+```
+```{r Figure 7.3}
+#Draw Figure 7.3
+grid.arrange(extreme_demand_density,
+             ncol=1,
+             top = textGrob("Figure 7.3 Density of total demand by Extrene Temperature",
+                            gp=gpar(fontsize=18,font=1)))
+```
+Upon inspecting the densities of total energy demand by seasons and months via Figure 7.1 and 7.2, it can be further identified that the only group that has a visible different mean compared to the other seasons is winter. However upon looking at this at a monthly level, it can be identified that August does indeed have much wider distribution compared to June and July, as shown in figure 6 also. This further indicates that months should be used instead of seasons in predictive models in order to reduce noise. Additionally, if the density of total energy demand is grouped via extreme temperature (figure 7.3), it can be identified that the overlap is much less when compared to when grouped by seasons and months, indicating extreme temperature flags would be another potential contender to be used in terms of creating a predictive model.
 
 
 **Total energy demand by temperature, rainfall, and solar exposure**
@@ -375,7 +387,7 @@ Scatter Plot of figure 8 has been created to display the relationship between to
 
 ```{r Figure 9}
 #Draw Figure 9
-ggcorrplot(corr, p.mat = cor_pmat(dat_correl),
+ggcorrplot(var_corr, p.mat = cor_pmat(dat_var_correl),
            hc.order = FALSE, 
            type = "upper",
            color = c("#FC4E07", "white", "#00AFBB"),
@@ -385,8 +397,7 @@ ggcorrplot(corr, p.mat = cor_pmat(dat_correl),
 ```
 Using the correlation matrix, it is possible to identify how strong are the relationships between each variable [@HaddAlexandria2021Ucm]. When the data is inspected at correlation perspective via figure 9, from total energy demand perspective, the highest correlated variables are nearly always associated with cold temperature. For example, it is understandable where temperature does not hold a strong correlation with total energy demand, given in figure 8, where the scatter plot does not exhibit a linear trend; however, from the correlation matrix of  figure 9, fields such as cold day, extreme cold day, and winter flag hold some of the highest correlation with total energy demand, indicating triggering those flags would result in higher total energy demand. Another field that holds a high correlation of 0.5 with total energy demand is during_day (flagging hours between 8 am ~ 8 pm), and this again strengthens assumption 2 of energy consumption being higher during human active hours. Furthermore, the negative correlation of -0.2 of datehour with total energy demand again contradicts assumption 3, hence we can settle with the statement that total energy demand is indeed gradually reducing over time. 
 ```{r figure 10}
-#Draw Figure 10
-ggcorrplot(corr, p.mat = cor_pmat(dat_month_correl),
+ggcorrplot(month_corr, p.mat = cor_pmat(dat_month_correl),
            hc.order = FALSE, 
            type = "upper",
            color = c("#FC4E07", "white", "#00AFBB"),
@@ -396,7 +407,7 @@ ggcorrplot(corr, p.mat = cor_pmat(dat_month_correl),
 ```
 In the correlation matrix of total energy demand against month flags, via figure 10, the highest correlation can be identified in July, as well as August, indicating higher energy demand during these two months. This is quite surprising as August had much less increase in terms of total energy demand compared to June and July as per Figure 6. This indicates that perhaps both July and August should be kept for creating the predictive model.
 ```{r figure 11}
-ggcorrplot(corr, p.mat = cor_pmat(dat_hour_correl),
+ggcorrplot(hour_corr, p.mat = cor_pmat(dat_hour_correl),
            hc.order = FALSE, 
            type = "upper",
            color = c("#FC4E07", "white", "#00AFBB"),
