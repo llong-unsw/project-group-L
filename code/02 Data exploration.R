@@ -474,22 +474,22 @@ hourly_total_energy_demand_hist <- unit_k(line_base(data_Excl_202208$TOTALDEMAND
 
 hourly_average_temperature_hist <- line_base(data_Excl_202208$TEMPERATURE,
                                              data_Excl_202208$DATE,
-                                             "Temperature (Celsius) per Hour",
+                                             "Temperature (C) per Hour",
                                              "Year-Month-Day Hour",
-                                             "Temperature (Celsius)") 
+                                             "Temperature") 
 
 
 daily_average_rainfall_hist <- line_base(data_Excl_202208$DAILY_RAINFALL_AMT_MM,
                                          data_Excl_202208$DATE,
                                          "Rainfall (mm) per Day",
                                          "Year-Month-Day Hour",
-                                         "Rainfall (mm)") 
+                                         "Rainfall") 
 
 daily_average_solar_hist <- line_base(data_Excl_202208$DAILY_GLBL_SOLAR_EXPOSR,
                                       data_Excl_202208$DATE,
                                       "Solar Exposure (kj/m**2) per Day",
                                       "Year-Month-Day Hour",
-                                      "Solar Exposure (kj/m**2)") 
+                                      "Solar Exposure") 
 
 #Display the charts for fig 1
 grid.arrange(hourly_total_energy_demand_hist,
@@ -497,7 +497,7 @@ grid.arrange(hourly_total_energy_demand_hist,
              daily_average_rainfall_hist,
              daily_average_solar_hist,
              ncol=1,
-             top = textGrob("Figure 1. yyyy-mm-dd hh of 2010-01 ~ 2022-07",
+             top = textGrob("Figure 1. 2010-01 ~ 2022-07",
                             gp=gpar(fontsize=16,font=1))
 )
 
@@ -525,22 +525,22 @@ mthly_total_energy <- unit_k(line_base(data_mthly_agg$TOTALDEMAND,
 
 mthly_average_temperature_hist <- line_base(data_mthly_agg$TEMPERATURE,
                                             data_mthly_agg$YEARMONTH,
-                                            "Monthly Average Temperature (Celsius)",
+                                            "Monthly Average Temperature (C)",
                                             "Year - Month",
-                                            "Temperature (Celsius)") 
+                                            "Temperature") 
 
 
 mthly_total_rainfall_hist <- unit_k(line_base(data_mthly_agg$daily_rainfall,
                                               data_mthly_agg$YEARMONTH,
                                               "Monthly Total Rainfall (mm)",
                                               "Year - Month",
-                                              "Rainfall (mm)")) 
+                                              "Rainfall")) 
 
 mthly_average_solar_hist <- line_base(data_mthly_agg$daily_solar,
                                       data_mthly_agg$YEARMONTH,
                                       "Monthly Average Solar Exposure (kj/m**2)",
                                       "Year - Month",
-                                      "Solar Exposure (kj/m**2)") 
+                                      "Solar Exposure") 
 
 #Display the charts for fig 2
 grid.arrange(mthly_total_energy,
@@ -576,31 +576,31 @@ mthly_average_temperature_hist_2010 <- line_base(data_mthly_agg[year(data_mthly_
                                                  "Temperature (Celsius)") 
 mthly_average_temperature_hist_2021 <- line_base(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,]$TEMPERATURE,
                                                  data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,]$YEARMONTH,
-                                                 "2021 Monthly Average Temperature (Celsius)",
+                                                 "2021 Monthly Average Temperature (C)",
                                                  "Year - Month",
-                                                 "Temperature (Celsius)") 
+                                                 "Temperature") 
 #monthly total rainfall 2010 and 2021
 mthly_total_rainfall_hist_2010 <- unit_k(line_base(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,]$daily_rainfall,
                                                    data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,]$YEARMONTH,
                                                    "2010 Monthly Total Rainfall (mm)",
                                                    "Year - Month",
-                                                   "Rainfall (mm)")) 
+                                                   "Rainfall")) 
 mthly_total_rainfall_hist_2021 <- unit_k(line_base(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,]$daily_rainfall,
                                                    data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,]$YEARMONTH,
                                                    "2021 Monthly Total Rainfall (mm)",
                                                    "Year - Month",
-                                                   "Rainfall (mm)")) 
+                                                   "Rainfall")) 
 #monthly average solar exposure 2010 and 2021
 mthly_average_solar_hist_2010 <- line_base(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,]$daily_solar,
                                            data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,]$YEARMONTH,
                                            "2010 Monthly Average Solar Exposure (kj/m**2)",
                                            "Year - Month",
-                                           "Solar Exposure (kj/m**2)") 
+                                           "Solar Exposure") 
 mthly_average_solar_hist_2021 <- line_base(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,]$daily_solar,
                                            data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,]$YEARMONTH,
                                            "2021 Monthly Average Solar Exposure (kj/m**2)",
                                            "Year - Month",
-                                           "Solar Exposure (kj/m**2)") 
+                                           "Solar Exposure") 
 #Display the charts for fig 3
 grid.arrange(mthly_total_energy_2010,
              mthly_total_energy_2021,
@@ -678,7 +678,7 @@ grid.arrange(demand_hist,
 ###########################################################
 ##Figure 5 Residual of AEMO Forecast with actual forecast##
 ###########################################################
-#Historical residual
+#Historical Residual
 residual_hist <- ggplot()+
   geom_line(data=data_mthly_agg,aes(y=TOTALDEMAND-FINAL_FORECAST,x= YEARMONTH),size=1.3,color = "darkred" )+
   labs(title = "Historical Residual", 
@@ -693,7 +693,7 @@ residual_hist <- ggplot()+
   scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))+
 geom_hline(yintercept=0, linetype="dashed", color = "black")
 
-#2010 ACTUAL VERSUS PREDICTION
+#2010 Residual
 residual_2010 <- ggplot(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,], aes(x=YEARMONTH)) + 
   geom_line(size=1.3, aes(y = TOTALDEMAND-FINAL_FORECAST), color = "darkred") + 
   labs(title = "2010 Residual", 
@@ -708,7 +708,7 @@ residual_2010 <- ggplot(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,],
   scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))+
   geom_hline(yintercept=0, linetype="dashed", color = "black")
 
-#2021 ACTUAL VERSUS PREDICTION
+#2021 Residual
 residual_2021 <- ggplot(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,], aes(x=YEARMONTH)) + 
   geom_line(size=1.3, aes(y = TOTALDEMAND-FINAL_FORECAST), color = "darkred") + 
   labs(title = "2021 Residual", 
@@ -806,20 +806,21 @@ unit_k_x <- function(i){
   i+scale_x_continuous(labels = label_number(suffix = " k", scale = 1e-3))
 }
 
+#Density plot of energy demand by Season
 season_demand_density <- unit_k_x(density_base(data_Excl_202208$TOTALDEMAND,
                                                data_Excl_202208$SEASON,
                                                "Density of Total Energy Demand per Hour by Season",
                                                "Total Energy Demand"
                                                , "Seasons")
 )
-
+#Density plot of energy demand by Month
 month_demand_density <- unit_k_x(density_base(data_Excl_202208$TOTALDEMAND,
                                               as.factor(data_Excl_202208$MONTH),
                                               "Density of Total Energy Demand per Hour by Month",
                                               "Total Demand",
                                               "Months")
 )
-
+#Density plot of energy demand by Extreme Temperature
 extreme_demand_density <- unit_k_x(density_base(data_Excl_202208$TOTALDEMAND,
                                               as.factor(data_Excl_202208$EXTREMES),
                                               "Density of Total Energy Demand per Hour by Extreme Temperature",
@@ -976,7 +977,6 @@ ggcorrplot(month_corr, p.mat = cor_pmat(dat_month_correl),
            title = "Figure 10 Correlation Matrix of Total Energy Demand by Month")
 
 #Create hour correlation matrix
-#Create month correlation matrix
 dat_hour_correl <- data_Excl_202208 %>%
   ungroup() %>%
   select(TOTALDEMAND,
@@ -1023,6 +1023,12 @@ plot_demand <- ggplot(lagged_correlations, aes(x = Lag))+
     x = "Lag (Hours)",
     y = "Correlation"
   ) +
+  theme(legend.key.size = unit(1, 'cm'), 
+        legend.key.height = unit(0.5, 'cm'), 
+        legend.key.width = unit(0.5, 'cm'), 
+        legend.title = element_text(size=7), 
+        legend.text = element_text(size=7),
+        axis.title=element_text(size=8,face="bold")) +
   theme_minimal()
 
 grid.arrange(plot_demand, 
