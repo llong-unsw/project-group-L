@@ -616,8 +616,124 @@ grid.arrange(mthly_total_energy_2010,
 )
 
 
+####################################################################
+##Figure 4 Line chart of forecast versus actual Hist & 2010 & 2021##
+####################################################################
+#Historical ACTUAL VERSUS PREDICTION
+demand_hist <- ggplot()+
+  geom_line(data=data_mthly_agg,aes(y=TOTALDEMAND,x= YEARMONTH,colour="Total Energy Demand"),size=1.3 )+
+  geom_line(data=data_mthly_agg,aes(y=FINAL_FORECAST,x= YEARMONTH,colour="AEMO Forecast"),size=1.3,linetype="twodash") +
+  scale_color_manual(name = "Lines", values = c("Total Energy Demand" = "darkred", "AEMO Forecast" = "steelblue"))+
+  labs(title = "Historical Monthly Total Demand", 
+       x = "Year - Month", 
+       y = "Total Demand") +
+  theme(legend.key.size = unit(1, 'cm'), 
+        legend.key.height = unit(0.5, 'cm'), 
+        legend.key.width = unit(0.5, 'cm'), 
+        legend.title = element_text(size=7), 
+        legend.text = element_text(size=7),
+        axis.title=element_text(size=8,face="bold")) +
+  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
+
+#2010 ACTUAL VERSUS PREDICTION
+demand_2010 <- ggplot(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,], aes(x=YEARMONTH)) + 
+  geom_line(size=1.3, aes(y = TOTALDEMAND), color = "darkred") + 
+  geom_line(size=1.3,aes(y = FINAL_FORECAST), color="steelblue", linetype="twodash") +
+  labs(title = "2010 Monthly Total Demand", 
+       x = "Year - Month", 
+       y = "Total Demand") +
+  theme(legend.key.size = unit(1, 'cm'), 
+        legend.key.height = unit(0.5, 'cm'), 
+        legend.key.width = unit(0.5, 'cm'), 
+        legend.title = element_text(size=7), 
+        legend.text = element_text(size=7),
+        axis.title=element_text(size=8,face="bold")) +
+  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
+
+#2021 ACTUAL VERSUS PREDICTION
+demand_2021 <- ggplot(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,], aes(x=YEARMONTH)) + 
+  geom_line(size=1.3, aes(y = TOTALDEMAND), color = "darkred") + 
+  geom_line(size=1.3,aes(y = FINAL_FORECAST), color="steelblue", linetype="twodash") +
+  labs(title = "2021 Monthly Total Demand", 
+       x = "Year - Month", 
+       y = "Total Demand") +
+  theme(legend.key.size = unit(1, 'cm'), 
+        legend.key.height = unit(0.5, 'cm'), 
+        legend.key.width = unit(0.5, 'cm'), 
+        legend.title = element_text(size=7), 
+        legend.text = element_text(size=7),
+        axis.title=element_text(size=8,face="bold")) +
+  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
+
+
+#Combine as grid
+grid.arrange(demand_hist,
+             demand_2010,
+             demand_2021,
+             ncol=1,
+             top = textGrob("Figure 4 Comparing Monthly Total Energy Demand to AEMO Forecast",
+                            gp=gpar(fontsize=18,font=1)))
+
+
+###########################################################
+##Figure 5 Residual of AEMO Forecast with actual forecast##
+###########################################################
+#Historical residual
+residual_hist <- ggplot()+
+  geom_line(data=data_mthly_agg,aes(y=TOTALDEMAND-FINAL_FORECAST,x= YEARMONTH),size=1.3,color = "darkred" )+
+  labs(title = "Historical Residual", 
+       x = "Year - Month", 
+       y = "Residual") +
+  theme(legend.key.size = unit(1, 'cm'), 
+        legend.key.height = unit(0.5, 'cm'), 
+        legend.key.width = unit(0.5, 'cm'), 
+        legend.title = element_text(size=7), 
+        legend.text = element_text(size=7),
+        axis.title=element_text(size=8,face="bold")) +
+  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))+
+geom_hline(yintercept=0, linetype="dashed", color = "black")
+
+#2010 ACTUAL VERSUS PREDICTION
+residual_2010 <- ggplot(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,], aes(x=YEARMONTH)) + 
+  geom_line(size=1.3, aes(y = TOTALDEMAND-FINAL_FORECAST), color = "darkred") + 
+  labs(title = "2010 Residual", 
+       x = "Year - Month", 
+       y = "Residual") +
+  theme(legend.key.size = unit(1, 'cm'), 
+        legend.key.height = unit(0.5, 'cm'), 
+        legend.key.width = unit(0.5, 'cm'), 
+        legend.title = element_text(size=7), 
+        legend.text = element_text(size=7),
+        axis.title=element_text(size=8,face="bold")) +
+  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))+
+  geom_hline(yintercept=0, linetype="dashed", color = "black")
+
+#2021 ACTUAL VERSUS PREDICTION
+residual_2021 <- ggplot(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,], aes(x=YEARMONTH)) + 
+  geom_line(size=1.3, aes(y = TOTALDEMAND-FINAL_FORECAST), color = "darkred") + 
+  labs(title = "2021 Residual", 
+       x = "Year - Month", 
+       y = "Residual") +
+  theme(legend.key.size = unit(1, 'cm'), 
+        legend.key.height = unit(0.5, 'cm'), 
+        legend.key.width = unit(0.5, 'cm'), 
+        legend.title = element_text(size=7), 
+        legend.text = element_text(size=7),
+        axis.title=element_text(size=8,face="bold")) +
+  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))+
+  geom_hline(yintercept=0, linetype="dashed", color = "black")
+
+
+#Combine as grid
+grid.arrange(residual_hist,
+             residual_2010,
+             residual_2021,
+             ncol=1,
+             top = textGrob("Figure 5 Comparing Monthly Residuals",
+                            gp=gpar(fontsize=18,font=1)))
+
 ########################################################
-##Figure 4 Boxplot of Energy Demand by Year/Month/Hour##
+##Figure 6 Boxplot of Energy Demand by Year/Month/Hour##
 ########################################################
 
 #create function for boxplot 
@@ -663,12 +779,12 @@ grid.arrange(box_demand_year,
              box_demand_month,
              box_demand_hour, 
              ncol=1,
-             top = textGrob("Figure 4 Boxplot of Hourly Total demand by Year/Month/Hour",
+             top = textGrob("Figure 6 Boxplot of Hourly Total demand by Year/Month/Hour",
                             gp=gpar(fontsize=16,font=1)))
 
 
 ###########################################################
-##Figure 5 Density plot of Total Energy Demand and Season##
+##Figure 7 Density plot of Total Energy Demand and Season##
 ###########################################################
 #Create base function for density plot
 density_base <- function(x,group,titlelab,xlab,legenedlab) { 
@@ -703,15 +819,24 @@ month_demand_density <- unit_k_x(density_base(data_Excl_202208$TOTALDEMAND,
                                               "Total Demand",
                                               "Months")
 )
-#Draw Figure 5
+
+extreme_demand_density <- unit_k_x(density_base(data_Excl_202208$TOTALDEMAND,
+                                              as.factor(data_Excl_202208$EXTREMES),
+                                              "Density of Total Energy Demand per Hour by Extreme Temperature",
+                                              "Total Demand",
+                                              "Months")
+)
+#Draw Figure 7
 grid.arrange(season_demand_density,
              month_demand_density,
+             extreme_demand_density,
              ncol=1,
-             top = textGrob("Figure 5 Density of total demand by Season/Month",
+             top = textGrob("Figure 7 Density of total demand by Season/Month/Extreme Temperature",
                             gp=gpar(fontsize=18,font=1)))
 
+
 ############################################################
-##Figure 6 scatter plot of Demand against different fields##
+##Figure 8 scatter plot of Demand against different fields##
 ############################################################
 
 ##Create scatterplot of temperature versus total demand
@@ -769,24 +894,24 @@ base_demand_solar_scatter <- scatter_base(data_daily_solar_rainfall_sample$Total
                                           "Total Solar Exposure (Daily)",
                                           "Total Energy Demand (Daily)")
 
-#Draw Figure 6
+#Draw Figure 8
 grid.arrange(base_demand_temp_scatter,
              base_demand_rainfall_scatter,
              base_demand_solar_scatter,
              ncol=2,
-             top = textGrob("Figure 6 Scatterplot of Energy Demand against Various Factors",
+             top = textGrob("Figure 8 Scatterplot of Energy Demand against Various Factors",
                             gp=gpar(fontsize=18,font=1)))
 
 
 
 ###############################
-##Figure 7 Correlation matrix##
+##Figure 9 Correlation matrix##
 ###############################
 #create spring and autumn flag for correlation
 data_Excl_202208$spring_flag <- if_else(data_Excl_202208$SEASON == 'SPRING',1,0)
 data_Excl_202208$autumn_flag <- if_else(data_Excl_202208$SEASON == 'AUTUMN',1,0)
 
-dat_correl <- data_Excl_202208 %>%
+dat_var_correl <- data_Excl_202208 %>%
   ungroup() %>%
   select(TOTALDEMAND,
          DATEHOUR,
@@ -809,19 +934,19 @@ dat_correl <- data_Excl_202208 %>%
          EXTREME_COLD_DAY,
          EXTREME_COLD_NIGHT) %>% 
   mutate_all(as.numeric)
-corr <- round(cor(dat_correl), 1)
-#Draw Figure 7
-ggcorrplot(corr, p.mat = cor_pmat(dat_correl),
+var_corr <- round(cor(dat_var_correl), 1)
+#Draw Figure 9
+ggcorrplot(var_corr, p.mat = cor_pmat(dat_var_correl),
            hc.order = FALSE, 
            type = "upper",
            color = c("#FC4E07", "white", "#00AFBB"),
            outline.col = "white", lab = TRUE,
            tl.cex = 5, lab_size = 2,
-           title = "Figure 7 Correlation Matrix of Base Data")
+           title = "Figure 9 Correlation Matrix of Base Data")
 
-################################################################
-##Figure 8/9 Month and Hour correlation with total energy demand##
-################################################################
+####################################################################
+##Figure 10/11 Month and Hour correlation with total energy demand##
+####################################################################
 #Add Month and Hour indicators (numeric) 
 data_Excl_202208[paste0("Month_", 1:12)] <- as.data.frame(t(sapply(data_Excl_202208$MONTH, tabulate, 12)))
 data_Excl_202208 <- data_Excl_202208 %>% 
@@ -839,16 +964,16 @@ dat_month_correl <- data_Excl_202208 %>%
          starts_with("Month_")
   ) %>% 
   mutate_all(as.numeric)
-corr <- round(cor(dat_month_correl), 1)
+month_corr <- round(cor(dat_month_correl), 1)
 
-#Draw Figure 8
-ggcorrplot(corr, p.mat = cor_pmat(dat_month_correl),
+#Draw Figure 10
+ggcorrplot(month_corr, p.mat = cor_pmat(dat_month_correl),
            hc.order = FALSE, 
            type = "upper",
            color = c("#FC4E07", "white", "#00AFBB"),
            outline.col = "white", lab = TRUE,
            tl.cex = 5, lab_size = 2,
-           title = "Figure 8 Correlation Matrix of Total Energy Demand by Month")
+           title = "Figure 10 Correlation Matrix of Total Energy Demand by Month")
 
 #Create hour correlation matrix
 #Create month correlation matrix
@@ -858,19 +983,19 @@ dat_hour_correl <- data_Excl_202208 %>%
          starts_with("HOUR_")
   ) %>% 
   mutate_all(as.numeric)
-corr <- round(cor(dat_hour_correl), 1)
+hour_corr <- round(cor(dat_hour_correl), 1)
 
-#Draw Figure 9
-ggcorrplot(corr, p.mat = cor_pmat(dat_hour_correl),
+#Draw Figure 11
+ggcorrplot(hour_corr, p.mat = cor_pmat(dat_hour_correl),
            hc.order = FALSE, 
            type = "upper",
            color = c("#FC4E07", "white", "#00AFBB"),
            outline.col = "white", lab = TRUE,
            tl.cex = 5, lab_size = 2,
-           title = "Figure 9 Correlation Matrix of Total Energy Demand by Hour")
+           title = "Figure 11 Correlation Matrix of Total Energy Demand by Hour")
 
 ##################################################
-##Figure 10 Lagged correlation of energy demand##
+##Figure 12 Lagged correlation of energy demand##
 ##################################################
 # Create a data frame to store lagged correlations
 lags <- 1:24  # Example lag values from 1 to 24 hours
@@ -902,101 +1027,9 @@ plot_demand <- ggplot(lagged_correlations, aes(x = Lag))+
 
 grid.arrange(plot_demand, 
              ncol = 1,
-             top = textGrob("Figure 10 Lagged Correlation of Total Energy Demand",
+             top = textGrob("Figure 12 Lagged Correlation of Total Energy Demand",
                             gp=gpar(fontsize=18,font=1)))
 
-###########################################################
-##Create line chart of forecast versus actual 2010 & 2021##
-###########################################################
-#Create dataset with mothly aggregate
-data_mthly_agg <- data %>% group_by(YEARMONTH) %>% summarise(TOTALDEMAND = sum(TOTALDEMAND),
-                                                             FINAL_FORECAST = sum())
-
-#2010 ACTUAL VERSUS PREDICTION
-demand_2010 <- ggplot(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2010,], aes(x=YEARMONTH)) + 
-  geom_line(size=1.3, aes(y = TOTALDEMAND), color = "darkred") + 
-  geom_line(size=1.3,aes(y = FINAL_FORECAST), color="steelblue", linetype="twodash") +
-  labs(title = "2010 Monthly Total Demand", 
-       x = "Year - Month", 
-       y = "Total Demand") +
-  theme(legend.key.size = unit(1, 'cm'), 
-        legend.key.height = unit(0.5, 'cm'), 
-        legend.key.width = unit(0.5, 'cm'), 
-        legend.title = element_text(size=7), 
-        legend.text = element_text(size=7),
-        axis.title=element_text(size=8,face="bold")) +
-  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
-
-#2021 ACTUAL VERSUS PREDICTION
-demand_2021 <- ggplot(data_mthly_agg[year(data_mthly_agg$YEARMONTH) == 2021,], aes(x=YEARMONTH)) + 
-  geom_line(size=1.3,aes(y = TOTALDEMAND), color = "darkred") + 
-  geom_line(size=1.3,aes(y = FINAL_FORECAST), color="steelblue", linetype="twodash") +
-  labs(title='2021')+
-  labs(title = "2021 Monthly Total Demand", 
-       x = "Year - Month", 
-       y = "Total Demand") +
-  theme(legend.key.size = unit(1, 'cm'), 
-        legend.key.height = unit(0.5, 'cm'), 
-        legend.key.width = unit(0.5, 'cm'), 
-        legend.title = element_text(size=7), 
-        legend.text = element_text(size=7),
-        axis.title=element_text(size=8,face="bold")) +
-  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
-#Highest variability is still in Summer/Winter months
-
-#Combine as grid
-grid.arrange(demand_2010,
-             demand_2021,
-             ncol=1)
-
-#########################################################################
-##Create 2x1 line chart of total demand/residual against month by years##
-#########################################################################
-
-#Comparing total demand by months throughout the years
-actual_monthly_by_year <- ggplot(data_mthly_agg[data_mthly_agg$YEARMONTH != '2022-08-01',]
-       , aes(x=as.factor(month(YEARMONTH)), 
-                           y=TOTALDEMAND, 
-                           group=as.factor(year(YEARMONTH)), 
-                           color=as.factor(year(YEARMONTH)))) + 
-  geom_line(size=1.3) +
-  labs(title = "Total Energy Demand by Month", 
-       x = "Month", 
-       y = "Total Energy Demand ",
-       color = "Year") +
-  theme(legend.key.size = unit(1, 'cm'), 
-        legend.key.height = unit(0.5, 'cm'), 
-        legend.key.width = unit(0.5, 'cm'), 
-        legend.title = element_text(size=7), 
-        legend.text = element_text(size=7),
-        axis.title=element_text(size=8,face="bold")) +
-  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
-#Variability increases at highest prior season change
-
-#Comparing variability throughout the years
-AEMO_residual <- ggplot(data_mthly_agg, aes(x=as.factor(month(YEARMONTH)), 
-                           y=TOTALDEMAND-FINAL_FORECAST, 
-                           group=as.factor(year(YEARMONTH)), 
-                           color=as.factor(year(YEARMONTH)))) + 
-  geom_line(size=1.3) +
-  geom_hline(yintercept=0, linetype="dashed", color = "black") +
-  labs(title = "Monthly Residual of AEMO Prediction versus Actual Energy Demand", 
-       x = "Month", 
-       y = "AEMO Forecast - Actual Total Energy Demand",
-       color = "Year") +
-  theme(legend.key.size = unit(1, 'cm'), 
-        legend.key.height = unit(0.5, 'cm'), 
-        legend.key.width = unit(0.5, 'cm'), 
-        legend.title = element_text(size=7), 
-        legend.text = element_text(size=7),
-        axis.title=element_text(size=8,face="bold")) +
-  scale_y_continuous(labels = label_number(suffix = " k", scale = 1e-3))
-#Variability increases at highest prior season change
-
-#Combine as grid
-grid.arrange(actual_monthly_by_year,
-             AEMO_residual,
-             ncol=1)
 
 
 
