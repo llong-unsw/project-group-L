@@ -91,23 +91,23 @@ Our paper seeks to build upon the success in the literature above by applying si
 
 ## Software
 
-Our analysis and modelling were conducted using the R programming language, known for its proficiency in statistical analysis and data manipulation. We leveraged several essential R packages to streamline data management and analysis, empowering us to build robust predictive models. Some of the key R packages we used include: 
+Our analysis and modelling were conducted using the R programming language [@R], known for its proficiency in statistical analysis and data manipulation. We leveraged several essential R packages to streamline data management and analysis, empowering us to build robust predictive models. Some of the key R packages we used include: 
 
-- **tidyverse:** This comprehensive package suite equipped us with a powerful set of tools for data manipulation, visualization, and analysis. Its flexibility and integration with other packages were essential for our data preparation and exploration. 
+- **tidyverse:** This comprehensive package suite equipped us with a powerful set of tools for data manipulation, visualization, and analysis. Its flexibility and integration with other packages were essential for our data preparation and exploration [@tidyverse]. 
 
-- **lubridate:** Essential for working with date and time data, a crucial aspect of time series analysis. This package allowed us to handle temporal information efficiently and accurately. 
+- **lubridate:** Essential for working with date and time data, a crucial aspect of time series analysis. This package allowed us to handle temporal information efficiently and accurately [@lubridate]. 
 
-- **data.table:** We harnessed the efficiency of the data.table package for data manipulation tasks, particularly when dealing with large datasets. Its speed and concise syntax were instrumental in aggregating and selecting columns. 
+- **data.table:** We harnessed the efficiency of the data.table package for data manipulation tasks, particularly when dealing with large datasets. Its speed and concise syntax were instrumental in aggregating and selecting columns [@data.table]. 
 
-- **crayon:** Used for adding colourful text to our visualizations, enhancing their interpretability, and making our reports more engaging. 
+- **crayon:** Used for adding colourful text to our visualizations, enhancing their interpretability, and making our reports more engaging [@crayon]. 
 
-- **zoo:** As a pivotal package for handling time series data, zoo played a crucial role in our analysis. It provided the tools needed to process, manipulate, and visualize time-based data structures. 
+- **zoo:** As a pivotal package for handling time series data, zoo played a crucial role in our analysis. It provided the tools needed to process, manipulate, and visualize time-based data structures [@zoo]. 
 
-- **tsibble:** Facilitating the management of time series data, tsibble served as the foundation for our time-based operations, ensuring consistency and accuracy in our analyses. 
+- **tsibble:** Facilitating the management of time series data, tsibble served as the foundation for our time-based operations, ensuring consistency and accuracy in our analyses [@tsibble]. 
 
-- **gridExtra, grid, patchwork:** These packages enabled us to create complex grid layouts for our visualizations, enhancing the presentation of our findings and insights. 
+- **gridExtra, grid, patchwork:** These packages enabled us to create complex grid layouts for our visualizations, enhancing the presentation of our findings and insights [@gridExtra][@R][@patchwork]. 
 
-- **GGally:** This package expanded our ggplot2-based visualizations by offering additional plot types and features, enriching our data exploration. 
+- **GGally:** This package expanded our ggplot2-based visualizations by offering additional plot types and features, enriching our data exploration [@GGally]. 
 
 ## Data Acquisition
 
