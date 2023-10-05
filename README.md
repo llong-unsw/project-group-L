@@ -16,7 +16,7 @@ Complete the information below regarding your group.
 
 ### Brief project description
 
-Describe your project in one paragraph.
+The aim of this paper is to investigate different modelling techniques to generate a rolling 60 min forward demand forecast for the state NSW electricity grid that could be used by quick start pumped hydro electricity generator to help minimise operational costs and give a competitive edge in pricing which will benefit its profitability and flow down to lower costs for the end users of the electricity grid.
 
 ## Repository structure
 
