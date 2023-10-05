@@ -1,8 +1,9 @@
 ---
 title: "A Data Science Approach to Short-Term Energy Demand Forecast"
-team: L
-session: Hex 5, 2023
-coursecode: ZZSC9020
+subtitle: |
+  | Team L 
+  | Hex 5, 2023 ZZSC9020
+  | Github link: https://github.com/llong-unsw/project-group-L
 author: 
   - "Louis Long (z5162359)"
   - "Mark Budrewicz (z5353932)"
@@ -39,7 +40,10 @@ knitr::opts_chunk$set(fig.pos = "H")
 # 1. if need to set working directory to the repo, do so below
 # setwd(<insert working directory here>)
 
-# 2. open Code/03 Modelling and check the parameters
+# 2. ensure the relevant packages in this project has been installed
+# this can be done by opening Code/01 Setup.R and running the script in RStudio
+
+# 3. open Code/03 Modelling.R and check the parameters
 # in particular, whether to refresh the models 
 
 # run required scripts
@@ -55,9 +59,11 @@ source("Code/03 Modelling.R") # modelling
 Short term electricity demand forecasting plays a key role in helping electricity generators plan and optimise their generation schedules. With the increasing uptake in renewable electricity generation, this places even more importance on having a more accurate load forecasting for especially for quick start electricity generators who help to stabilise the grid when there is limited solar and wind electricity. A more accurate forecast helps each generator to make more informed economic decisions improving profitability. This paper sets out to improve upon the Australian Energy Market Operator's (AEMO) explanatory short term electricity demand forecasting model by focusing on the predictive capability of supplementary variables and investigating more sophisticated machine learning techniques. Each of our models was able to outperform the AEMO benchmark forecast. We identify that the inclusion of lagged demand (akin to autoregression) helps to simplify our models and limits the number of additional explanatory variables needed to forecast short term electricity demand. In addition, we find that support vector regression's ability to model the nonlinear relationships of variables ensure that it outperforms our other techniques in predicting short term electricity demand.
 
 # Motivation
+
 Electricity demand forecasting is a topic that is within the interest of government and market bodies, with the consensus of accurate forecasts of energy demand driving profitability. Electricity in Australia is generated primarily using oil, coal, and gas as fuel[@BhattacharyaMita2020Coep]. Also, with oil prices increasing, this implies that the cost to generate energy will also increase[@KpodarKangni2022Tdio]. Therefore, profit maximization is achieved when energy production is minimized to be near actual energy demand. Thus, if electricity demand can be modelled accurately, government and market bodies can then utilize such information to tailor policies as well as optimize pricing. A recent phenomenon in the electricity grid has been the shift towards renewable energy sources such solar photovoltaic and wind generation. While these technologies are indeed cleaner they bring with them risks[@arenawebsite] due to their intermittency and inability to be dispatchable as compared to electricity produced from fossil fuels. As of 2021, renewables accounted for 23% of total electricity generation in the state of NSW[@energywebsite]. As it is non dispatchable, renewable electricity generation acts to lower the energy demand of the grid, so much so, that the Australian Energy Market Operation (AEMO) has already acknowledged that the increasing uptake in rooftop solar will shift maximum load demand to later in the day at sunset as temperatures remain high but roof top solar output falls to nil[@AEMOdemandwebsite]. The increase in renewable electricity generation will see a parallel requirement for flexible electricity generation such as gas, pumped hydro and grid scale batteries with quick ramp up ability to cope with the variability in supply[@AGLwebsite]. And with that, a more robust shorter term electricity demand forecasting process will be required to ensure that the quick start alternative electricity generators have sufficient warning to ramp up when required.
 
 # Introduction
+
 The aim of this paper is to investigate different modelling techniques to generate a rolling 60 min forward demand forecast for the state NSW electricity grid that could be used by quick start pumped hydro electricity generators to help minimise operational costs and give a competitive edge in pricing which will benefit its profitability and flow down to lower costs for the end users of the electricity grid.
 
 Quick start electricity generators such as pumped hydro are essential to the electricity generation mix as they add flexibility to the grid to cope with highly variable demand [@AGLwebsite]. This flexibility ensures a sufficient balance of supply and demand as these quick start generators can supply with a shorter ramp up period. While the ramp up period is shorter than conventional base load generators, it still important for an electricity generator to be able to estimate how much electricity is required by the grid within a short forecast window so that it can strategically plan generation output to minimise its startup and shut down costs and maximise profit. Times of high load requirement in the grid inevitable lead to higher spot prices and conversely times of low load lead to lower spot prices. Pumped hydro generators act like large scale batteries for the grid with a unique position to take advantage of both ends of the demand spectrum, dispatching electricity at times of high load, and consuming electricity from the grid at times of low demand to pump water back upstream to "recharge" their water reservoirs. So, it is incumbent on pumped hydro operators to be able to accurately forecast and capitalise on such situations, in line with its operational constraints (startup and shutdown times, maintenance requirements). While an electricity demand forecast is already generated by AEMO [@AEMOforecastwebsite] for participants in the grid, this analysis aims to investigate a forecasting model that will outperform AEMO's demand forecast, allowing a supplier to take advantage of potential misalignment in AEMO's forecast to actual load demand.
@@ -259,16 +265,16 @@ These visualizations played a pivotal role in our analysis by helping us uncover
 \newpage
 
 # Exploratory Data Analysis
-Historical Trend of All Variables
-```{r Figure 1 line chart over time (hourly)}
+
+**Historical Trend of All Variables**
+
+```{r eda_plot_1, fig.cap = "Line chart over time at hourly level", out.height = "60%", out.width = "90%"}
 #Display the charts for fig 1
 grid.arrange(hourly_total_energy_demand_hist,
              hourly_average_temperature_hist,
              daily_average_rainfall_hist,
              daily_average_solar_hist,
-             ncol=1,
-             top = textGrob("Figure 1. Line chart over time at hourly level 2010-01 ~ 2022-07",
-                            gp=gpar(fontsize=16,font=1))
+             ncol=1
 )
 ```
 In figure 1, line charts are created at the most granular level of year-month-date-hour. However, at this level of detail, it is difficult to identify trends clearly due to the amount of noise presented, suggesting further aggregation is required in order to identify the trends clearly. Also to note that the final period recorded of 2022-08 is omitted from the charts, as the only datapoint from this particular month is incomplete at hour level, and would cause significant dropoff of trend. 
@@ -277,23 +283,23 @@ Looking at the general trend over time for all variables from figure 1, the only
 
 Figure 2 displays a line chart of data aggregated to a month level. Aggregating data to monthly level displays a clear smoothing impact to the line charts. 
 
-```{r Figure 2 line chart over time (monthly)}
+\newpage
+
+```{r eda_plot_2, fig.cap = "Line chart over time at monthly level", out.height = "35%", out.width = "90%"}
 #Display the charts for fig 2
 grid.arrange(mthly_total_energy,
              mthly_average_temperature_hist,
              mthly_total_rainfall_hist,
              mthly_average_solar_hist,
-             ncol=1,
-             top = textGrob("Figure 2. Line chart over time at monthly level 2010-01 ~ 2022-07",
-                            gp=gpar(fontsize=16,font=1))
+             ncol=1
 )
 ```
 
 **Looking at Trend via individual years**
 
-When the data is viewed at a monthly level via line chart in Figure 2, clear seasonality can be identified through having smoother lines in total energy demand, temperature, and solar exposure. Total rainfall viewed at monthly level still does not exhibit any seasonality. From an assumption perspective, traces of energy demand being affected by temperature are starting to appear. Also with regards to assumption three, the trend chart of monthly total energy demand over time is starting to display a slow decline in total energy demand over the years. 
+When the data is viewed at a monthly level via line chart in Figure 2, clear seasonality can be identified through having smoother lines in total energy demand, temperature, and solar exposure. Total rainfall viewed at monthly level still does not exhibit any seasonality. From assumption 1 perspective, traces of energy demand being affected by temperature are starting to appear. Also with regards to assumption three, the trend chart of monthly total energy demand over time is starting to display a slow decline in total energy demand over the years. 
 
-```{r Figure 3}
+```{r eda_plot_3, fig.cap = "2010 and 2021", out.height = "35%", out.width = "90%"}
 #Display the charts for fig 3
 grid.arrange(mthly_total_energy_2010,
              mthly_total_energy_2021,
@@ -303,36 +309,42 @@ grid.arrange(mthly_total_energy_2010,
              mthly_total_rainfall_hist_2021,
              mthly_average_solar_hist_2010,
              mthly_average_solar_hist_2021,
-             ncol=2,
-             top = textGrob("Figure 3. 2010 and 2021",
-                            gp=gpar(fontsize=16,font=1))
+             ncol=2
 )
 ```
 
+\newpage
+
 When the monthly trend is viewed at individual year level as per Figure 3, it can be identified that the trend did not change significantly between 2010 and 2021, for energy demand, average temperature, and average solar exposure. The reason why 2022 is not used despite being the final year recorded is because the data used in this project does not contain all months of 2022. It can also be noted that total energy demand peaks when average monthly temperature is at its highest or lowest point. Additionally, solar exposure when magnified to monthly level surfaces its relationship with temperature clearly. Furthermore, rainfall's trend remained stochastic, exhibiting no relationship with other variables.
 
-Comparing AEMO Predictions with Actual Total Energy Demand
+**Comparing AEMO Predictions with Actual Total Energy Demand**
+
 Given it is now known that total energy demand is seasonal, and follows a distinct pattern every year, we can now plot AEMO final forecast and total energy demand against months. In figure 4, final AEMO forecast and total energy demand is plotted against date at monthly level, both forecast and demands are aggregated via summing. From the line chart we can see that AEMO forecast is relatively close to actual demand, and deviation seems to occur when actual energy demand is at highest or lowest. This suggests having a plot of residual may be needed to better tell the variability.
-```{r Figure 4}
+
+```{r eda_plot_4, fig.cap = "Monthly Total Energy Demand and AEMO Forecast", out.height = "35%", out.width = "90%"}
 #Combine as grid
 grid.arrange(demand_hist,
              demand_2010,
              demand_2021,
-             ncol=1,
-             top = textGrob("Figure 4 Monthly Total Energy Demand and AEMO Forecast",
-                            gp=gpar(fontsize=18,font=1)))
+             ncol=1
+)
 
 ```
+
 Via inspecting the line chart of residuals as per figure 5, and given residuals are calculated as actual - predicted, we can identify that prior 2014 AEMO's model seems to overestimate quite frequently, of having residuals lower than 0.  However, between the period of 2015 and 2018, AEMO's mode has quite often underestimated energy demand, of having residuals larger than 0. Otherwise post 2018 forecast seems to have become more stable for most cases.  
-```{r Figure 5}
+
+\newpage
+
+```{r eda_plot_5, fig.cap = "Comparing Monthly Residuals", out.height = "35%", out.width = "90%"}
 grid.arrange(residual_hist,
              residual_2010,
              residual_2021,
-             ncol=1,
-             top = textGrob("Figure 5 Comparing Monthly Residuals",
-                            gp=gpar(fontsize=18,font=1)))
+             ncol=1
+)
 ```
+
 Overall, the mean squared error(MSE) and mean absolute error (MAE) is as per below for AEMO's model. MSE in this case would be informative as it provides a better picture in terms of of deviation distribution [@ChaiT2014Rmse]. Via comparing the significant gap between MSE and MAE, the difference indicates that AEMO's model may have large amount of errors, resulting in MSE being significantly bigger than MAE, as MSE is penalized more the bigger the error is. 
+
 ```{r MSE MAE AEMO}
 print(MAE_MSE)
 ```
@@ -341,15 +353,15 @@ print(MAE_MSE)
 
 Through using boxplot, it is possible to see the distribution of total energy demand across time. Figure 6 displays total energy demand is plotted against various time variables, specifically year, month, and hour. Each of these views will be discussed individually as per below. 
 
-```{r Figure 6}
+```{r eda_plot_6, fig.cap = "Boxplot of Hourly Total demand by Year/Month/Hour", out.height = "50%", out.width = "90%"}
 #Create Fig 6                                
 grid.arrange(box_demand_year,
              box_demand_month,
              box_demand_hour, 
-             ncol=1,
-             top = textGrob("Figure 6 Boxplot of Hourly Total demand by Year/Month/Hour",
-                            gp=gpar(fontsize=16,font=1)))
+             ncol=1
+)
 ```
+
 **Year**
 
 At yearly view we can see the fluctuation of max and min total energy demand across time. The most key point taken from this view would be  the slight decrease of average total energy consumption per hour across the years. This is an interesting point because it contradicts assumption 3, where an increase of total energy demand is expected due to an increase of extreme temperature occurrences.  Thus, we can rule the assumption to be false, where yearly average hourly total energy demand is indeed decreasing. 
@@ -362,86 +374,91 @@ At a monthly level, it can be identified that months of June, July, August, Janu
 
 Looking at hourly boxplot of total energy demand, the key point identified would be total energy demand is highest between 8 am and 7 pm, and is lowest between 2 am to 6 am. This verified assumption 2, of total energy demand to be higher during hours of human activity. Hourly boxplot verifies that hour can be used as a variable in terms of modelling, as there is clearly a pattern exhibited by the chart particularly around the mean of total energy demand per hour.
 
-```{r Figure 7.1}
+\newpage
+
+```{r eda_plot_7, fig.cap = "Density of total demand by Season", out.height = "25%", out.width = "70%"}
 #Draw Figure 7.1
 grid.arrange(season_demand_density,
-             ncol=1,
-             top = textGrob("Figure 7.1 Density of total demand by Season",
-                            gp=gpar(fontsize=18,font=1)))
+             ncol=1)
 ```
-```{r Figure 7.2}
+
+```{r eda_plot_8, fig.cap = "Density of total demand by Month", out.height = "25%", out.width = "70%"}
 #Draw Figure 7.2
 grid.arrange(month_demand_density,
-             ncol=1,
-             top = textGrob("Figure 7.2 Density of total demand by Month",
-                            gp=gpar(fontsize=18,font=1)))
+             ncol=1)
 ```
-```{r Figure 7.3}
+
+```{r eda_plot_9, fig.cap = "Density of total demand by Extrene Temperature", out.height = "25%", out.width = "70%"}
 #Draw Figure 7.3
 grid.arrange(extreme_demand_density,
-             ncol=1,
-             top = textGrob("Figure 7.3 Density of total demand by Extreme Temperature",
-                            gp=gpar(fontsize=18,font=1)))
+             ncol=1)
 ```
-Upon inspecting the densities of total energy demand by seasons and months via Figure 7.1 and 7.2, it can be further identified that the only group that has a visible different mean compared to the other seasons is winter. However upon looking at this at a monthly level, it can be identified that August does indeed have much wider distribution compared to June and July, as shown in figure 6 also. This further indicates that months should be used instead of seasons in predictive models in order to reduce noise. Additionally, if the density of total energy demand is grouped via extreme temperature (figure 7.3), it can be identified that the overlap is much less when compared to when grouped by seasons and months, indicating extreme temperature flags would be another potential contender to be used in terms of creating a predictive model.
 
+\newpage
+
+Upon inspecting the densities of total energy demand by seasons and months via Figure 7 and 8, it can be further identified that the only group that has a visible different mean compared to the other seasons is winter. However upon looking at this at a monthly level, it can be identified that August does indeed have much wider distribution compared to June and July, as shown in figure 6 also. This further indicates that months should be used instead of seasons in predictive models in order to reduce noise. Additionally, if the density of total energy demand is grouped via extreme temperature (figure 9), it can be identified that the overlap is much less when compared to when grouped by seasons and months, indicating extreme temperature flags would be another potential contender to be used in terms of creating a predictive model.
 
 **Total energy demand by temperature, rainfall, and solar exposure**
-```{r Figure 8}
+
+```{r eda_plot_10, fig.cap = "Scatterplot of Energy Demand against Various Factors", out.height = "35%", out.width = "90%"}
 grid.arrange(base_demand_temp_scatter,
              base_demand_rainfall_scatter,
              base_demand_solar_scatter,
-             ncol=2,
-             top = textGrob("Figure 8 Scatterplot of Energy Demand against Various Factors",
-                            gp=gpar(fontsize=18,font=1)))
+             ncol=2)
 
 ```
-Scatter Plot of figure 8 has been created to display the relationship between total energy demand and temperature, rainfall, and solar exposure. At top level, all scatter plots created in figure 8 are exhibiting great spread, suggesting correlation to be more useful in terms of strength of relationship. Nevertheless, it is still possible to get some characteristics from these relationships, particularly for temperature. From the total energy demand against temperature scatterplot, it is possible to identify that total energy demand increases when temperature shifts either left or right from 20 degrees. Rainfall and Solar scatter plots on the other hand exhibited little trend, where rainfall scatterplot is very much just stochastic when compared to total energy demand.
+
+Scatter Plot of figure 10 has been created to display the relationship between total energy demand and temperature, rainfall, and solar exposure. At top level, all scatter plots created in figure 8 are exhibiting great spread, suggesting correlation to be more useful in terms of strength of relationship. Nevertheless, it is still possible to get some characteristics from these relationships, particularly for temperature. From the total energy demand against temperature scatterplot, it is possible to identify that total energy demand increases when temperature shifts either left or right from 20 degrees. Rainfall and Solar scatter plots on the other hand exhibited little trend, where rainfall scatterplot is very much just stochastic when compared to total energy demand.
+
+\newpage
 
 **Correlation Matrix of Total Energy Demand**
 
-```{r Figure 9}
+```{r eda_plot_11, fig.cap = "Correlation Matrix of Base Data", out.height = "40%", out.width = "90%"}
 #Draw Figure 9
 ggcorrplot(var_corr, p.mat = cor_pmat(dat_var_correl),
            hc.order = FALSE, 
            type = "upper",
            color = c("#FC4E07", "white", "#00AFBB"),
            outline.col = "white", lab = TRUE,
-           tl.cex = 5, lab_size = 2,
-           title = "Figure 9 Correlation Matrix of Base Data")
+           tl.cex = 5, lab_size = 2)
 ```
-Using the correlation matrix, it is possible to identify how strong are the relationships between each variable [@HaddAlexandria2021Ucm]. When the data is inspected at correlation perspective via figure 9, from total energy demand perspective, the highest correlated variables are nearly always associated with cold temperature. For example, it is understandable where temperature does not hold a strong correlation with total energy demand, given in figure 8, where the scatter plot does not exhibit a linear trend; however, from the correlation matrix of  figure 9, fields such as cold day, extreme cold day, and winter flag hold some of the highest correlation with total energy demand, indicating triggering those flags would result in higher total energy demand. Another field that holds a high correlation of 0.5 with total energy demand is during_day (flagging hours between 8 am ~ 8 pm), and this again strengthens assumption 2 of energy consumption being higher during human active hours. Furthermore, the negative correlation of -0.2 of datehour with total energy demand again contradicts assumption 3, hence we can settle with the statement that total energy demand is indeed gradually reducing over time. 
-```{r figure 10}
+
+Using the correlation matrix, it is possible to identify how strong are the relationships between each variable [@HaddAlexandria2021Ucm]. When the data is inspected at correlation perspective via figure 11, from total energy demand perspective, the highest correlated variables are nearly always associated with cold temperature. For example, it is understandable where temperature does not hold a strong correlation with total energy demand, given in figure 10, where the scatter plot does not exhibit a linear trend; however, from the correlation matrix of  figure 11, fields such as cold day, extreme cold day, and winter flag hold some of the highest correlation with total energy demand, indicating triggering those flags would result in higher total energy demand. Another field that holds a high correlation of 0.5 with total energy demand is during_day (flagging hours between 8 am ~ 8 pm), and this again strengthens assumption 2 of energy consumption being higher during human active hours. Furthermore, the negative correlation of -0.2 of datehour with total energy demand again contradicts assumption 3, hence we can settle with the statement that total energy demand is indeed gradually reducing over time. 
+
+\newpage
+
+```{r eda_plot_12, fig.cap = "Correlation Matrix of Total Energy Demand by Month", out.height = "35%", out.width = "90%"}
 ggcorrplot(month_corr, p.mat = cor_pmat(dat_month_correl),
            hc.order = FALSE, 
            type = "upper",
            color = c("#FC4E07", "white", "#00AFBB"),
            outline.col = "white", lab = TRUE,
-           tl.cex = 5, lab_size = 2,
-           title = "Figure 10 Correlation Matrix of Total Energy Demand by Month")
+           tl.cex = 5, lab_size = 2)
 ```
-In the correlation matrix of total energy demand against month flags, via figure 10, the highest correlation can be identified in July, as well as August, indicating higher energy demand during these two months. This is quite surprising as August had much less increase in terms of total energy demand compared to June and July as per Figure 6. This indicates that perhaps both July and August should be kept for creating the predictive model.
-```{r figure 11}
+
+In the correlation matrix of total energy demand against month flags, via figure 12, the highest correlation can be identified in July, as well as August, indicating higher energy demand during these two months. This is quite surprising as August had much less increase in terms of total energy demand compared to June and July as per Figure 6. This indicates that perhaps both July and August should be kept for creating the predictive model.
+
+```{r eda_plot_13, fig.cap = "Correlation Matrix of Total Energy Demand by Hour", out.height = "35%", out.width = "90%"}
 ggcorrplot(hour_corr, p.mat = cor_pmat(dat_hour_correl),
            hc.order = FALSE, 
            type = "upper",
            color = c("#FC4E07", "white", "#00AFBB"),
            outline.col = "white", lab = TRUE,
-           tl.cex = 5, lab_size = 2,
-           title = "Figure 11 Correlation Matrix of Total Energy Demand by Hour")
+           tl.cex = 5, lab_size = 2)
 ```
-Upon inspecting the correlation matrix of total energy demand against hour flags in Figure 11, it can be identified that hour 3 to 5 have the highest negative correlation, whilst hour 17 ~ 9 have the highest positive correlation. The correlation matrix of the hour flag against total energy demand again demonstrates that there is a pattern between total energy demand and hour of day.
+
+Upon inspecting the correlation matrix of total energy demand against hour flags in Figure 13, it can be identified that hour 3 to 5 have the highest negative correlation, whilst hour 17 ~ 9 have the highest positive correlation. The correlation matrix of the hour flag against total energy demand again demonstrates that there is a pattern between total energy demand and hour of day.
 
 Overall, the correlation matrix  from figure 9,10 and 11 shows us that in terms of predictive model, the fields that definitely should be used are extreme temperature flags, hour flags, and month flags.
 
 **Lagged Correlation of Total Energy Demand**
 
-```{r figure 12}
+```{r eda_plot_14, fig.cap = "Lagged Correlation of Total Energy Demand", out.height = "35%", out.width = "90%"}
 grid.arrange(plot_demand, 
-             ncol = 1,
-             top = textGrob("Figure 12 Lagged Correlation of Total Energy Demand",
-                            gp=gpar(fontsize=18,font=1)))
+             ncol = 1)
 ```
+
 Finally, lagged correlation of total energy demand will be investigated. Lagged correlation looks at the correlation between time shifted time series data [@ZagourasAthanassios2015Otro]. Essentially what this section is after is finding the best lag that can be used to predict future total energy demand. In this case, lags of 0 to 24 will be tested. The result as per figure 12, is that the most correlated lag would be lag of 1 and 24, which 24 will be ignored as it is essentially the same time given 24 hours. Therefore, total energy demand has the highest lagged correlation when shifted with a lag of 1.
 
 \newpage
