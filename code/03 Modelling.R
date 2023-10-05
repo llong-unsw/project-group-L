@@ -326,7 +326,7 @@ actuals_demand_test <- rf_test[, .SD, .SDcols = y_cols]
 # set hyperparameter grid
 rf_hyper_grid <- list(
   ntrees        = seq(100, 500, by = 100)
-  , mtries      = seq(5, 35, by = 5)
+  , mtries      = 3:5
   , sample_rate = c(0.5, 0.8, by = 0.1)
   , max_depth   = 5:10
 )
